@@ -1,0 +1,450 @@
+flatpak (0.6.10-1) unstable; urgency=medium
+
+  * New upstream release
+    - d/libflatpak0.symbols: update
+    - Build-depend on ostree 2016.10
+    - Bump bubblewrap (build-)dependencies to 0.1.2
+    - Drop all patches except
+      d/p/debian/Try-gtk-3.0-version-of-the-icon-cache-utility-first.patch:
+      all applied upstream
+    - Demote libpam-systemd from Depends to Recommends. It is no longer
+      mandatory to be running systemd --user, since flatpak 0.6.10
+      identifies contained processes via their
+      /proc/$pid/root/.flatpak-info instead of via cgroups
+  * d/copyright: mention the Autoconf permissive license of acinclude.m4
+  * Make libflatpak-dev Multi-Arch: same
+
+ -- Simon McVittie <smcv@debian.org>  Thu, 15 Sep 2016 08:28:19 +0100
+
+flatpak (0.6.9-1) unstable; urgency=medium
+
+  * New upstream release
+    - d/control: libgsystem is no longer required
+    - d/copyright: update for new libglnx
+    - drop most patches, applied upstream
+  * Drop unused build-dependency on docbook-xsl-doc-html.
+    It is documentation about docbook-xsl, so isn't needed at build-time.
+  * Expand build-dependencies to what we would use if no tests are skipped.
+    In practice buildds disallow some of what the tests do, but we shouldn't
+    rely on that.
+  * d/patches: cherry-pick various post-release bug fixes from upstream
+  * Build-depend on attr, and make flatpak-tests depend on it, for better
+    test coverage if /var/tmp supports xattrs
+  * Build-depend on fuse, so we can run fusermount if supported
+  * Make flatpak-tests depend on ostree instead of using d/tests/control
+  * d/p/make-test-runtime-cope-with-Debian-s-Python-2.7-configura.patch,
+    add patch to make more build-time tests pass
+  * d/p/Tell-build-time-tests-which-bwrap-we-are-going-to-use.patch:
+    skip tests that cannot be run because we are in an environment where
+    bwrap fails
+  * d/p/test_install_launch_uninstall-consistently-check-for-GErr.patch:
+    add patch to improve diagnostics on some test failures
+  * d/p/document-portal-cope-with-multiple-events-that-would-caus.patch:
+    in the document portal, don't crash if there is more than one reason
+    to exit
+  * Remove unused lintian overrides
+  * Add lintian override for flatpak-system-helper.service.
+    It is deliberately missing an [Install] section (so enabling it for
+    eager startup is not possible), because it is intended to be
+    started via D-Bus activation.
+  * d/p/Terminate-gpg-agent-after-using-it-for-tests.patch:
+    add patch to terminate gpg-agent processes after use
+  * Terminate any further stray gpg-agent processes when running tests
+
+ -- Simon McVittie <smcv@debian.org>  Wed, 07 Sep 2016 22:42:09 +0100
+
+flatpak (0.6.8-1) unstable; urgency=medium
+
+  * New upstream release
+    - d/copyright: source files are now licensed as LGPL-2.1+
+    - d/flatpak.install: install systemd snippet to configure dbus.service
+      with flatpak in XDG_DATA_DIRS
+    - d/control, d/rules: build-depend on xmlto and enable all documentation
+    - d/flatpak.install: install documentation for the command-line tools,
+      and i18n
+    - d/p/dist/Add-flatpak-metadata.xml-from-upstream-git.patch:
+      Add missing flatpak-metadata.xml from upstream git, which was not
+      included in the released tarball
+  * d/p/unrpm-prevent-shell-injection.patch: Avoid shell injection
+    when building a Flatpak from an RPM
+  * d/p/Wait-for-locks-in-TEST_DATA_DIR-to-be-released-before-del.patch:
+    Drop patch, it does not appear to make testing pass on ci.debian.net
+    as I had hoped
+  * d/tests: mark test-extensions.sh to only be run in virtual machines,
+    in the hope that when ci.debian.net gets a qemu runner, it will
+    work there
+
+ -- Simon McVittie <smcv@debian.org>  Tue, 02 Aug 2016 15:19:41 +0100
+
+flatpak (0.6.7-2) unstable; urgency=medium
+
+  * d/p/libtest-replace-dbus-launch-with-dbus-daemon.patch:
+    Add patch to stop using dbus-launch in the tests
+  * d/p/Wait-for-locks-in-TEST_DATA_DIR-to-be-released-before-del.patch:
+    Add patch to avoid a race condition during testing between the
+    container's "init" process shutting down, and libtest.sh proceeding
+    with cleanup in response to the container's main process (which
+    exits first) shutting down
+
+ -- Simon McVittie <smcv@debian.org>  Thu, 28 Jul 2016 09:12:38 +0100
+
+flatpak (0.6.7-1) unstable; urgency=medium
+
+  * New upstream release
+    - drop all patches except d/p/debian/*, applied upstream
+    - d/libflatpak0.symbols: update for new ABIs
+    - d/control: depend and build-depend on OSTree 2016.6
+    - d/tests/control: flatpak-builder test now needs git
+  * Depend on system bubblewrap (Closes: #824647)
+  * Remove obsolete note about requiring unprivileged user namespaces
+  * d/p/build-run-install-test-data-hook-even-if-using-system-bwr.patch:
+    add patch to fix installed-tests with system bwrap
+
+ -- Simon McVittie <smcv@debian.org>  Wed, 06 Jul 2016 12:45:03 +0100
+
+flatpak (0.6.6-2) unstable; urgency=medium
+
+  * d/flatpak.postrm: delete /var/lib/flatpak/.changed on purge, fixing
+    piuparts error
+  * d/p/test-basic-do-not-fail-in-non-English-locales.patch: fix FTBFS
+    in non-English locales, for instance during reproducible build testing
+
+ -- Simon McVittie <smcv@debian.org>  Tue, 28 Jun 2016 08:33:51 +0100
+
+flatpak (0.6.6-1) unstable; urgency=medium
+
+  * New upstream release
+    - drop patches, applied upstream
+    - d/libflatpak0.symbols: update
+  * d/p/document-portal-don-t-reply-to-GetMountPoint-until-ready.patch:
+    Add patch to make the document portal (and hence FUSE support)
+    optional for "flatpak run"
+  * d/p/tests-don-t-treat-helper-scripts-as-though-they-were-test.patch:
+    Add patch to avoid non-test helper scripts being run as tests
+  * d/p/Downgrade-failure-to-get-document-portal-from-warning-to-.patch:
+    Add patch to avoid test failure when FUSE is unusable
+  * d/p/Run-tests-with-a-private-XDG_RUNTIME_DIR.patch:
+    Add patch to run tests with a private XDG_RUNTIME_DIR, so the
+    document portal under test works correctly even if the user is
+    already running one
+  * d/p/debian/Try-gtk-3.0-version-of-the-icon-cache-utility-first.patch:
+    bring back compatibility with gtk-update-icon-cache-3.0, for backports
+    - d/control: libgtk-3-bin is an alternative to
+      gtk-update-icon-cache again
+
+ -- Simon McVittie <smcv@debian.org>  Sat, 25 Jun 2016 12:03:06 +0100
+
+flatpak (0.6.5-1) unstable; urgency=medium
+
+  * New upstream release
+    - d/p/flatpak-run-don-t-fail-if-there-are-no-system-fonts.patch:
+      drop, applied upstream
+    - update symbols file for new ABI
+  * d/p/Link-libselinux-into-bwrap-if-enabled-with-LDADD-not-LDFL.patch:
+    make sure bwrap links even if the linker is pedantic
+  * d/tests/gnome-desktop-testing: correctly report failures
+  * d/tests/control: depend on ostree, used to export a Flatpak repository
+    for testing
+  * d/control: flatpak-builder Recommends binutils (for strip) and
+    elfutils (for eu-strip), which can be invoked outside the sandbox
+    by manifests that specify {'build-options': {'strip': true}}
+    or {'build-options': {'no-debuginfo': true}}
+  * d/p/sandbox-Make-var-tmp-and-tmp-different-dirs-not-symlinks.patch,
+    d/p/test-run-don-t-use-test_builddir-to-exercise-filesystem.patch:
+    add patches to make the installed-tests test-run.sh and
+    test-run-system.sh pass with --prefix=/usr
+  * Upload to unstable (LP: #1590411)
+
+ -- Simon McVittie <smcv@debian.org>  Tue, 21 Jun 2016 10:22:13 +0100
+
+flatpak (0.6.4-1) experimental; urgency=medium
+
+  * New upstream release
+    - d/p/Correctly-handle-with-privileged-group.patch: drop, no longer
+      necessary
+    - adjust packaging for new name and location of flatpak-bwrap
+    - adjust packaging for new location of installed-tests
+  * Unconditionally recommend gtk-update-icon-cache now that it's in
+    testing
+    - d/p/Try-gtk-3.0-version-of-the-icon-cache-utility-first.patch:
+        drop, no longer necessary
+  * d/control: update Homepage
+  * d/copyright: update Source
+  * tests: depend on attr, for setfattr, to get better test coverage
+    (still skipped if /var/tmp on the testbed does not support xattrs)
+  * d/p/flatpak-run-don-t-fail-if-there-are-no-system-fonts.patch:
+    don't fail uses of flatpak-run or the builder test if the system
+    has no fonts
+  * debian/org.freedesktop.Flatpak.pkla: add an equivalent of the
+    upstream JavaScript polkit rules (used by polkit >= 0.106),
+    for use with polkit 0.105 as shipped in Debian. This allows members
+    of group 'sudo' to install apps and runtimes into the system-wide
+    location, from any remote that was previously added/trusted by a
+    privileged user, without re-authenticating. (Closes: #825766)
+
+ -- Simon McVittie <smcv@debian.org>  Sun, 05 Jun 2016 15:19:00 +0100
+
+flatpak (0.6.2-1) experimental; urgency=medium
+
+  * New upstream release
+    - d/p/Treat-members-of-sudo-group-as-privileged.patch: drop,
+      superseded by new --with-privileged-group option
+    - d/p/Skip-tests-that-make-a-repository-if-var-tmp-lacks-user-x.patch:
+      drop, merged upstream
+  * Use new --with-privileged-group option to make "sudo" group privileged
+    - d/p/Correctly-handle-with-privileged-group.patch: add post-release
+      patch from upstream to make it work
+    - drop hack to make admin group privileged on Ubuntu, they started to
+      phase out that group in 2012
+  * Build-depend on libdw-dev from src:elfutils instead of libdwarf-dev.
+    Both provide dwarf.h, which is all we really need; libdw-dev is
+    the one that is used in various important packages, including systemd.
+    We also require src:elfutils anyway, for libelf-dev. (Closes: #825191)
+  * debian/upstream/signing-key.asc: add
+  * debian/gbp.conf: automatically merge upstream tag into imported source
+
+ -- Simon McVittie <smcv@debian.org>  Tue, 24 May 2016 20:24:48 +0100
+
+flatpak (0.6.1-1) experimental; urgency=medium
+
+  * New upstream release
+    - drop patches to bubblewrap, included in the submodule upstream
+  * d/p/Try-gtk-3.0-version-of-the-icon-cache-utility-first.patch:
+    add missing space between the tool's name and its --quiet argument
+  * d/p/Treat-members-of-sudo-group-as-privileged.patch:
+    use sudo, not wheel, as the group of administrative users
+    - d/rules: alter the polkit policy on Ubuntu derivatives to treat
+      the admin group as equivalent to sudo
+  * d/rules: don't install bwrap setuid on Ubuntu. Ubuntu enables
+    unprivileged user namespaces by default. (Closes: #825090)
+  * d/p/Skip-tests-that-make-a-repository-if-var-tmp-lacks-user-x.patch:
+    skip several tests if we can run bwrap, but cannot write extended
+    attributes in /var/tmp, for example on an Ubuntu live system
+  * Use dh_girepository to get correct ${gir:Depends}
+  * Prefer gtk-update-icon-cache as provider of the binary of the same
+    name, but still accept libgtk-3-bin for now, to be nice to backports
+
+ -- Simon McVittie <smcv@debian.org>  Mon, 23 May 2016 23:06:50 +0100
+
+flatpak (0.6.0-3) experimental; urgency=medium
+
+  * Build-depend on procps, for /bin/kill (used in the tests).
+    This fixes FTBFS in a more up-to-date buildd schroot.
+
+ -- Simon McVittie <smcv@debian.org>  Sun, 22 May 2016 14:19:12 +0100
+
+flatpak (0.6.0-2) experimental; urgency=medium
+
+  * debian/flatpak.postinst: initialize /var/lib/flatpak/repo
+    as requested by upstream
+  * debian/flatpak.postrm: remove /var/lib/flatpak/repo on purge
+  * Use dh-systemd to restart flatpak-system-helper on upgrades
+  * debian/tests/control: flatpak-builder test requires make
+  * Add patches from bubblewrap bug #71 to the embedded copy of bwrap,
+    fixing flatpak-builder on the normal configuration of Debian kernels
+  * Change patch for gtk-update-icon-cache-3.0 to fall back to
+    gtk-update-icon-cache. This means it will still work when the
+    Debian-specific gtk-update-icon-cache-3.0 name is dropped.
+
+ -- Simon McVittie <smcv@debian.org>  Sat, 21 May 2016 22:57:49 +0100
+
+flatpak (0.6.0-1) experimental; urgency=medium
+
+  * Rename package from xdg-app to flatpak, following upstream rename
+  * New upstream release
+    - Remove patches, applied upstream
+    - Add new build-dependency on libpolkit-gobject-1-dev
+  * libflatpak-dev: depend on libflatpak0, not flatpak (Closes: #823328)
+  * debian/copyright: update
+  * Install bwrap (bubblewrap) helper tool setuid by default, so that
+    the package works without further configuration (Closes: #823535)
+    - note that an unreleased snapshot of bwrap is also available as
+      src:bubblewrap; for now this package uses its bundled submodule,
+      until we get a better idea of how closely these packages will
+      need to track each other
+  * Add autopkgtests for as-installed testing
+  * Build-depend on dbus-x11: the tests explicitly use dbus-launch
+
+ -- Simon McVittie <smcv@debian.org>  Wed, 04 May 2016 09:36:05 +0100
+
+xdg-app (0.5.2-1) experimental; urgency=medium
+
+  * New upstream release
+  * debian/patches/install-Only-set-current-for-apps-not-for-runtimes.patch:
+    remove, no longer necessary (and wasn't applied)
+  * debian/gbp.conf: use DEP-14 branch names
+  * Correct ITP bug number in previous changelog entry (was #697477,
+    should have been #813308)
+  * Don't build-depend on fuse. The test that uses fuse appears to fail on
+    buildds, possibly because the kernel module is blacklisted; it should
+    automatically be skipped when fuse isn't installed.
+  * debian/gbp.conf: disable numbered patches, to reduce diff noise when
+    they get applied upstream
+  * d/p/session-helper-connect-the-D-Bus-and-systemd-services.patch:
+    link the D-Bus session service to the systemd user service
+  * Standards-Version: 3.9.8 (no changes needed)
+
+ -- Simon McVittie <smcv@debian.org>  Mon, 25 Apr 2016 09:06:11 +0100
+
+xdg-app (0.5.0-1) experimental; urgency=medium
+
+  * Prepare package for Debian (Closes: #813308)
+  * Set the Utopia Maintenance Team as maintainer, with myself and
+    Matthias Klumpp as uploaders
+  * Add Vcs-Git, Vcs-Browser (in collab-maint git)
+  * Remove unnecessary use of dh-exec
+  * Remove -dbg package, rely on automatic dbgsym packages instead
+  * debian/.gitignore: add
+  * debian/copyright: fill in all copyright holders
+  * Normalize packaging via `wrap-and-sort -abst`
+  * Adjust Section for the packages
+  * Run the tests with VERBOSE=1
+  * Install the new systemd user services
+  * Run dh_install with --fail-missing to catch mistakes
+  * Rename libxdgapp to the correct libxdg-app0 corresponding to
+    libxdg-app.so.0
+  * Rename libxdgapp-dev to libxdg-app-dev for consistency
+  * Stop disabling the test that relies on FUSE; it is now correctly
+    skipped if appropriate
+  * Re-enable gtk-doc and add a libxdg-app-doc package
+  * Add libxdg-app0.symbols
+  * Add missing development dependencies
+  * Set ${libexecdir} to /usr/lib/xdg-app, to avoid the toolchain getting
+    confused by PIE executables in ${libexecdir} and treating them as
+    incorrectly-named shared libraries
+  * xdg-app-builder: reduce non-mandatory build tools to Recommends
+  * xdg-app-builder: do not depend on tar, which is Essential
+  * Fill in better values for Description
+  * Depend on libpam-systemd (i.e. a working systemd-logind),
+    because xdg-app currently relies on systemd to put user processes
+    in cgroups
+  * Run tests once via check-TESTS, but do not run them a second time
+    via gtester, which fails because all test-cases in one test might
+    be skipped
+  * debian/control: document how to enable user namespaces
+  * Only build for Linux: this package is specifically not portable
+
+ -- Simon McVittie <smcv@debian.org>  Sat, 19 Mar 2016 18:08:53 +0000
+
+xdg-app (0.5.0-0alexlarsson1~wily1) wily; urgency=medium
+
+  * Update to new upstream version
+
+ -- Alexander Larsson <alexander.larsson@gmail.com>  Wed, 16 Mar 2016 10:10:34 +0200
+
+xdg-app (0.4.13-0alexlarsson3~vivid1) vivid; urgency=medium
+
+  * Update to new upstream version
+
+ -- Alexander Larsson <alexander.larsson@gmail.com>  Fri, 26 Feb 2016 10:12:00 +0200
+
+xdg-app (0.4.12-0alexlarsson1~vivid1) vivid; urgency=medium
+
+  * Update to new upstream version
+
+ -- Alexander Larsson <alexander.larsson@gmail.com>  Fri, 19 Feb 2016 13:18:00 +0200
+
+xdg-app (0.4.11-0alexlarsson1~vivid1) vivid; urgency=medium
+
+  * Update to new upstream version
+
+ -- Alexander Larsson <alexander.larsson@gmail.com>  Tue, 9 Feb 2016 12:25:00 +0200
+
+xdg-app (0.4.10-0alexlarsson1~vivid1) vivid; urgency=medium
+
+  * Update to new upstream version
+
+ -- Alexander Larsson <alexander.larsson@gmail.com>  Tue, 9 Feb 2016 10:42:00 +0200
+
+xdg-app (0.4.9-0alexlarsson1~vivid1) vivid; urgency=medium
+
+  * Update to new upstream version
+
+ -- Alexander Larsson <alexander.larsson@gmail.com>  Mon, 8 Feb 2016 15:15:00 +0200
+
+xdg-app (0.4.7-alexlarsson1~vivid4) vivid; urgency=medium
+
+  * Disabled gtk-doc
+
+ -- Alexander Larsson <alexander.larsson@gmail.com>  Mon, 25 Jan 2016 11:15:00 +0200
+
+xdg-app (0.4.7-alexlarsson1~vivid1) vivid; urgency=medium
+
+  * New upstream release
+
+ -- Alexander Larsson <alexander.larsson@gmail.com>  Mon, 25 Jan 2016 11:05:00 +0200
+
+xdg-app (0.4.6-alexlarsson1~vivid2) vivid; urgency=medium
+
+  * New upstream release
+
+ -- Alexander Larsson <alexander.larsson@gmail.com>  Thu, 17 Dec 2015 11:05:00 +0200
+
+xdg-app (0.4.5-alexlarsson1~vivid) vivid; urgency=medium
+
+  * New upstream release
+
+ -- Alexander Larsson <alexander.larsson@gmail.com>  Fri, 06 Nov 2015 15:41:00 +0200
+
+xdg-app (0.4.4-alexlarsson1) vivid; urgency=medium
+
+  * New upstream release
+
+ -- Alexander Larsson <alexander.larsson@gmail.com>  Fri, 02 Oct 2015 10:01:55 +0200
+
+xdg-app (0.4.3-alexlarsson5) vivid; urgency=medium
+
+  * Really disable fuse tests
+
+ -- Alexander Larsson <alexander.larsson@gmail.com>  Fri, 02 Oct 2015 09:20:53 +0200
+
+xdg-app (0.4.3-alexlarsson4) vivid; urgency=medium
+
+  * Remove fuse based tests, as they don't work in ppa build
+
+ -- Alexander Larsson <alexander.larsson@gmail.com>  Fri, 02 Oct 2015 09:06:51 +0200
+
+xdg-app (0.4.3-alexlarsson3) vivid; urgency=medium
+
+  * Add fuse dependency
+
+ -- Alexander Larsson <alexander.larsson@gmail.com>  Fri, 02 Oct 2015 08:48:48 +0200
+
+xdg-app (0.4.3-alexlarsson2) vivid; urgency=medium
+
+  * Add dbus dependency
+
+ -- Alexander Larsson <alexander.larsson@gmail.com>  Fri, 02 Oct 2015 08:40:46 +0200
+
+xdg-app (0.4.3-alexlarsson1) vivid; urgency=medium
+
+  * New upstream release
+
+ -- Alexander Larsson <alexander.larsson@gmail.com>  Thu, 01 Oct 2015 13:06:05 +0200
+
+xdg-app (0.1-0amigadave4) trusty; urgency=low
+
+  * Add build dependency on dh-exec.
+
+ -- David King <amigadave@amigadave.com>  Wed, 08 Apr 2015 13:48:36 +0100
+
+xdg-app (0.1-0amigadave3) trusty; urgency=low
+
+  [ David King ]
+  * Add build dependency on libattr1-dev.
+
+ -- David King <amigadave@amigadave.com>  Wed, 08 Apr 2015 13:36:39 +0100
+
+xdg-app (0.1-0amigadave2) trusty; urgency=low
+
+  [ David King ]
+  * Add build dependency on xsltproc.
+
+ -- David King <amigadave@amigadave.com>  Wed, 08 Apr 2015 13:28:14 +0100
+
+xdg-app (0.1-0amigadave1) trusty; urgency=low
+
+  [ David King ]
+  * Initial packaging.
+
+ -- David King <amigadave@amigadave.com>  Thu, 02 Apr 2015 15:44:01 +0000
