@@ -64,7 +64,7 @@ Depends:
 Recommends:
  desktop-file-utils,
  hicolor-icon-theme,
- gtk-update-icon-cache,
+ gtk-update-icon-cache | libgtk-3-bin,
  libpam-systemd,
  policykit-1,
  shared-mime-info,
@@ -102,7 +102,7 @@ Depends:
  desktop-file-utils,
  flatpak (= ${binary:Version}),
  gnupg,
- gtk-update-icon-cache,
+ gtk-update-icon-cache | libgtk-3-bin,
  hicolor-icon-theme,
  ostree (>= 2018.6),
  shared-mime-info,
