@@ -7566,6 +7566,7 @@ flatpak_export_dir (GFile        *source,
     "share/gnome-shell/search-providers",  "../../..",
     "share/mime/packages",                 "../../..",
     "bin",                                 "..",
+    "share/eos-shell-content/splash",      "../../..",
   };
   int i;
 

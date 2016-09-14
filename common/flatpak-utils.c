@@ -714,6 +714,14 @@ flatpak_get_allowed_exports (const char     *source_path,
       g_ptr_array_add (allowed_extensions, g_strdup (".svg"));
       g_ptr_array_add (allowed_extensions, g_strdup (".ico"));
     }
+  else if (strcmp (source_path, "share/eos-shell-content/splash") == 0)
+    {
+      g_ptr_array_add (allowed_extensions, g_strdup (".svgz"));
+      g_ptr_array_add (allowed_extensions, g_strdup (".png"));
+      g_ptr_array_add (allowed_extensions, g_strdup (".svg"));
+      g_ptr_array_add (allowed_extensions, g_strdup (".jpg"));
+      g_ptr_array_add (allowed_extensions, g_strdup (".jpeg"));
+    }
   else if (strcmp (source_path, "share/dbus-1/services") == 0)
     {
       g_auto(GStrv) owned_dbus_names =  flatpak_context_get_session_bus_policy_allowed_own_names (context);
