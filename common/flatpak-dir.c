@@ -4460,7 +4460,8 @@ flatpak_dir_deploy_appstream (FlatpakDir   *self,
   }
   checkout_dir = g_file_new_for_path (checkout_dir_path);
 
-  options.mode = OSTREE_REPO_CHECKOUT_MODE_USER;
+  options.mode = (ostree_repo_get_mode (self->repo) == OSTREE_REPO_MODE_BARE) ?
+                 OSTREE_REPO_CHECKOUT_MODE_NONE : OSTREE_REPO_CHECKOUT_MODE_USER;
   options.overwrite_mode = OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES;
   options.enable_fsync = FALSE; /* We checkout to a temp dir and sync before moving it in place */
   options.bareuseronly_dirs = TRUE; /* https://github.com/ostreedev/ostree/pull/927 */
@@ -8201,7 +8202,8 @@ flatpak_dir_deploy (FlatpakDir          *self,
   if (!flatpak_repo_collect_sizes (self->repo, root, &installed_size, NULL, cancellable, error))
     return FALSE;
 
-  options.mode = OSTREE_REPO_CHECKOUT_MODE_USER;
+  options.mode = (ostree_repo_get_mode (self->repo) == OSTREE_REPO_MODE_BARE) ?
+                 OSTREE_REPO_CHECKOUT_MODE_NONE : OSTREE_REPO_CHECKOUT_MODE_USER;
   options.overwrite_mode = OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES;
   options.enable_fsync = FALSE; /* We checkout to a temp dir and sync before moving it in place */
   options.bareuseronly_dirs = TRUE; /* https://github.com/ostreedev/ostree/pull/927 */
