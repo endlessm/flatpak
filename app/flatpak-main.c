@@ -38,6 +38,7 @@ static gboolean opt_version;
 static gboolean opt_default_arch;
 static gboolean opt_supported_arches;
 static gboolean opt_user;
+static char *opt_custom_installation;
 
 typedef struct
 {
@@ -113,6 +114,7 @@ static GOptionEntry empty_entries[] = {
 GOptionEntry user_entries[] = {
   { "user", 0, 0, G_OPTION_ARG_NONE, &opt_user, N_("Work on user installations"), NULL },
   { "system", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_user, N_("Work on system-wide installations (default)"), NULL },
+  { "installation", 0, 0, G_OPTION_ARG_STRING, &opt_custom_installation, N_("Work on custom installation"), NULL },
   { NULL }
 };
 
@@ -231,6 +233,11 @@ flatpak_option_context_parse (GOptionContext     *context,
         g_print ("%s\n", arches[i]);
       exit (EXIT_SUCCESS);
     }
+
+  /* Need to set the custom installation path first of all, so
+   * that subsequent calls to custom dir related functions work */
+  if (opt_custom_installation != NULL && *opt_custom_installation != '\0')
+    flatpak_set_custom_installation_path (opt_custom_installation);
 
   if (!(flags & FLATPAK_BUILTIN_FLAG_NO_DIR))
     {

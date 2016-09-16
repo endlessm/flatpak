@@ -710,6 +710,7 @@ flatpak_list_deployed_refs (const char   *type,
 
   g_autoptr(GPtrArray) names = NULL;
   g_autoptr(GHashTable) hash = NULL;
+  g_autoptr(FlatpakDir) custom_dir = NULL;
   g_autoptr(FlatpakDir) user_dir = NULL;
   g_autoptr(FlatpakDir) system_dir = NULL;
   const char *key;
@@ -717,8 +718,15 @@ flatpak_list_deployed_refs (const char   *type,
 
   hash = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
+  custom_dir = flatpak_dir_get_custom ();
   user_dir = flatpak_dir_get_user ();
   system_dir = flatpak_dir_get_system ();
+
+  if (custom_dir != NULL &&
+      !flatpak_dir_collect_deployed_refs (custom_dir, type, name_prefix,
+                                          branch, arch, hash, cancellable,
+                                          error))
+    goto out;
 
   if (!flatpak_dir_collect_deployed_refs (user_dir, type, name_prefix,
                                           branch, arch, hash, cancellable,
@@ -750,14 +758,20 @@ flatpak_find_files_dir_for_ref (const char   *ref,
                                 GCancellable *cancellable,
                                 GError      **error)
 {
+  g_autoptr(FlatpakDir) custom_dir = NULL;
   g_autoptr(FlatpakDir) user_dir = NULL;
   g_autoptr(FlatpakDir) system_dir = NULL;
   g_autoptr(GFile) deploy = NULL;
 
+  custom_dir = flatpak_dir_get_custom ();
   user_dir = flatpak_dir_get_user ();
   system_dir = flatpak_dir_get_system ();
 
-  deploy = flatpak_dir_get_if_deployed (user_dir, ref, NULL, cancellable);
+  if (custom_dir != NULL)
+    deploy = flatpak_dir_get_if_deployed (custom_dir, ref, NULL, cancellable);
+
+  if (deploy == NULL)
+    deploy = flatpak_dir_get_if_deployed (user_dir, ref, NULL, cancellable);
   if (deploy == NULL)
     deploy = flatpak_dir_get_if_deployed (system_dir, ref, NULL, cancellable);
   if (deploy == NULL)
@@ -774,15 +788,24 @@ flatpak_find_deploy_for_ref (const char   *ref,
                              GCancellable *cancellable,
                              GError      **error)
 {
+  g_autoptr(FlatpakDir) custom_dir = NULL;
   g_autoptr(FlatpakDir) user_dir = NULL;
   g_autoptr(FlatpakDir) system_dir = NULL;
   g_autoptr(FlatpakDeploy) deploy = NULL;
   g_autoptr(GError) my_error = NULL;
 
+  custom_dir = flatpak_dir_get_custom ();
   user_dir = flatpak_dir_get_user ();
   system_dir = flatpak_dir_get_system ();
 
-  deploy = flatpak_dir_load_deployed (user_dir, ref, NULL, cancellable, &my_error);
+  if (custom_dir != NULL)
+    deploy = flatpak_dir_load_deployed (custom_dir, ref, NULL, cancellable, &my_error);
+
+  if (deploy == NULL && g_error_matches (my_error, FLATPAK_ERROR, FLATPAK_ERROR_NOT_INSTALLED))
+    {
+      g_clear_error (&my_error);
+      deploy = flatpak_dir_load_deployed (user_dir, ref, NULL, cancellable, &my_error);
+    }
   if (deploy == NULL && g_error_matches (my_error, FLATPAK_ERROR, FLATPAK_ERROR_NOT_INSTALLED))
     {
       g_clear_error (&my_error);
