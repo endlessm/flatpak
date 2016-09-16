@@ -36,10 +36,12 @@ static gboolean opt_show_details;
 static gboolean opt_user;
 static gboolean opt_system;
 static gboolean opt_show_disabled;
+static char *opt_custom_installation;
 
 static GOptionEntry options[] = {
   { "user", 0, 0, G_OPTION_ARG_NONE, &opt_user, N_("Show user installations"), NULL },
   { "system", 0, 0, G_OPTION_ARG_NONE, &opt_system, N_("Show system-wide installations"), NULL },
+  { "installation", 0, 0, G_OPTION_ARG_STRING, &opt_custom_installation, N_("Show custom installations"), NULL },
   { "show-details", 'd', 0, G_OPTION_ARG_NONE, &opt_show_details, N_("Show remote details"), NULL },
   { "show-disabled", 0, 0, G_OPTION_ARG_NONE, &opt_show_disabled, N_("Show disabled remotes"), NULL },
   { NULL }
@@ -49,6 +51,7 @@ gboolean
 flatpak_builtin_list_remotes (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
   g_autoptr(GOptionContext) context = NULL;
+  g_autoptr(FlatpakDir) custom_dir = NULL;
   g_autoptr(FlatpakDir) user_dir = NULL;
   g_autoptr(FlatpakDir) system_dir = NULL;
   FlatpakDir *dirs[2] = { 0 };
@@ -61,7 +64,13 @@ flatpak_builtin_list_remotes (int argc, char **argv, GCancellable *cancellable, 
   if (!flatpak_option_context_parse (context, options, &argc, &argv, FLATPAK_BUILTIN_FLAG_NO_DIR, NULL, cancellable, error))
     return FALSE;
 
-  if (!opt_user && !opt_system)
+  if (opt_custom_installation != NULL && *opt_custom_installation != '\0')
+    {
+      flatpak_set_custom_installation_path (opt_custom_installation);
+      custom_dir = flatpak_dir_get_custom ();
+      dirs[n_dirs++] = custom_dir;
+    }
+  else if (!opt_user && !opt_system)
     opt_system = TRUE;
 
   if (opt_user)
@@ -132,7 +141,9 @@ flatpak_builtin_list_remotes (int argc, char **argv, GCancellable *cancellable, 
               if (flatpak_dir_get_remote_noenumerate (dir, remote_name))
                 flatpak_table_printer_append_with_comma (printer, "no-enumerate");
 
-              if (opt_user && opt_system)
+              if (custom_dir != NULL && dir == custom_dir)
+                flatpak_table_printer_append_with_comma (printer, "custom");
+              else if (opt_user && opt_system)
                 flatpak_table_printer_append_with_comma (printer, dir == user_dir ? "user" : "system");
             }
           else
