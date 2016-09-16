@@ -2285,6 +2285,9 @@ export_desktop_file (const char   *app,
       new_exec = g_string_new ("");
       g_string_append_printf (new_exec, FLATPAK_BINDIR "/flatpak run --branch=%s --arch=%s", escaped_branch, escaped_arch);
 
+      if (custom_installation_path != NULL)
+        g_string_append_printf (new_exec, " --installation=%s", custom_installation_path);
+
       old_exec = g_key_file_get_string (keyfile, groups[i], "Exec", NULL);
       if (old_exec && g_shell_parse_argv (old_exec, &old_argc, &old_argv, NULL) && old_argc >= 1)
         {
