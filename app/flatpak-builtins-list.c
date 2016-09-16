@@ -38,10 +38,12 @@ static gboolean opt_system;
 static gboolean opt_runtime;
 static gboolean opt_app;
 static char *opt_arch;
+static char *opt_custom_installation;
 
 static GOptionEntry options[] = {
   { "user", 0, 0, G_OPTION_ARG_NONE, &opt_user, N_("Show user installations"), NULL },
   { "system", 0, 0, G_OPTION_ARG_NONE, &opt_system, N_("Show system-wide installations"), NULL },
+  { "installation", 0, 0, G_OPTION_ARG_STRING, &opt_custom_installation, N_("Show custom installations"), NULL },
   { "show-details", 'd', 0, G_OPTION_ARG_NONE, &opt_show_details, N_("Show arches and branches"), NULL },
   { "runtime", 0, 0, G_OPTION_ARG_NONE, &opt_runtime, N_("List installed runtimes"), NULL },
   { "app", 0, 0, G_OPTION_ARG_NONE, &opt_app, N_("List installed applications"), NULL },
@@ -89,7 +91,7 @@ print_installed_refs_for_dir (FlatpakDir *dir, GStrv *app, GStrv *runtime, GCanc
 }
 
 static gboolean
-print_installed_refs (gboolean app, gboolean runtime, gboolean print_system, gboolean print_user, const char *arch, GCancellable *cancellable, GError **error)
+print_installed_refs (gboolean app, gboolean runtime, gboolean print_system, gboolean print_user, gboolean print_custom, const char *arch, GCancellable *cancellable, GError **error)
 {
   g_autofree char *last = NULL;
 
@@ -99,9 +101,24 @@ print_installed_refs (gboolean app, gboolean runtime, gboolean print_system, gbo
   g_auto(GStrv) user = NULL;
   g_auto(GStrv) user_app = NULL;
   g_auto(GStrv) user_runtime = NULL;
+  g_auto(GStrv) custom = NULL;
+  g_auto(GStrv) custom_app = NULL;
+  g_auto(GStrv) custom_runtime = NULL;
+  g_autoptr(FlatpakDir) custom_dir = NULL;
   g_autoptr(FlatpakDir) user_dir = NULL;
   g_autoptr(FlatpakDir) system_dir = NULL;
-  int s, u;
+  int s, u, c;
+
+  if (print_custom)
+    {
+      custom_dir = flatpak_dir_get (FLATPAK_DIR_TYPE_CUSTOM);
+      if (!print_installed_refs_for_dir (custom_dir,
+                                         app ? &custom_app : NULL,
+                                         runtime ? &custom_runtime : NULL,
+                                         cancellable,
+                                         error))
+        return FALSE;
+    }
 
   if (print_user)
     {
@@ -127,15 +144,16 @@ print_installed_refs (gboolean app, gboolean runtime, gboolean print_system, gbo
 
   FlatpakTablePrinter *printer = flatpak_table_printer_new ();
 
+  custom = join_strv (custom_app, custom_runtime);
   user = join_strv (user_app, user_runtime);
   system = join_strv (system_app, system_runtime);
 
-  for (s = 0, u = 0; system[s] != NULL || user[u] != NULL; )
+  for (s = 0, u = 0, c = 0; system[s] != NULL || user[u] != NULL || custom[c] != NULL; )
     {
       char *ref, *partial_ref;
       g_auto(GStrv) parts = NULL;
       const char *repo = NULL;
-      gboolean is_user;
+      gboolean is_user = FALSE;
       FlatpakDir *dir = NULL;
       g_autoptr(GVariant) deploy_data = NULL;
 
@@ -148,7 +166,13 @@ print_installed_refs (gboolean app, gboolean runtime, gboolean print_system, gbo
       else
         is_user = TRUE;
 
-      if (is_user)
+      /* Custom installations have precedence */
+      if (custom[c] != NULL)
+        {
+          ref = custom[c++];
+          dir = custom_dir;
+        }
+      else if (is_user)
         {
           ref = user[u++];
           dir = user_dir;
@@ -210,7 +234,9 @@ print_installed_refs (gboolean app, gboolean runtime, gboolean print_system, gbo
 
           flatpak_table_printer_add_column (printer, ""); /* Options */
 
-          if (print_user && print_system)
+          if (print_custom)
+            flatpak_table_printer_append_with_comma (printer, "custom");
+          else if (print_user && print_system)
             flatpak_table_printer_append_with_comma (printer, is_user ? "user" : "system");
 
           if (strcmp (parts[0], "app") == 0)
@@ -272,9 +298,13 @@ flatpak_builtin_list (int argc, char **argv, GCancellable *cancellable, GError *
   if (!opt_app && !opt_runtime)
     opt_app = TRUE;
 
+  if (opt_custom_installation != NULL && *opt_custom_installation != '\0')
+    flatpak_set_custom_installation_path (opt_custom_installation);
+
   if (!print_installed_refs (opt_app, opt_runtime,
-                             opt_system || (!opt_user && !opt_system),
-                             opt_user || (!opt_user && !opt_system),
+                             opt_system || (!opt_custom_installation && !opt_user && !opt_system),
+                             opt_user || (!opt_custom_installation && !opt_user && !opt_system),
+                             opt_custom_installation != NULL && *opt_custom_installation != '\0',
                              opt_arch,
                              cancellable, error))
     return FALSE;
