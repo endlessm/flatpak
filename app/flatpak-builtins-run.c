@@ -44,6 +44,7 @@ static gboolean opt_log_session_bus;
 static gboolean opt_log_system_bus;
 static char *opt_runtime;
 static char *opt_runtime_version;
+static char *opt_custom_installation;
 
 static GOptionEntry options[] = {
   { "arch", 0, 0, G_OPTION_ARG_STRING, &opt_arch, N_("Arch to use"), N_("ARCH") },
@@ -54,6 +55,7 @@ static GOptionEntry options[] = {
   { "runtime-version", 0, 0, G_OPTION_ARG_STRING, &opt_runtime_version, N_("Runtime version to use"), N_("VERSION") },
   { "log-session-bus", 0, 0, G_OPTION_ARG_NONE, &opt_log_session_bus, N_("Log session bus calls"), NULL },
   { "log-system-bus", 0, 0, G_OPTION_ARG_NONE, &opt_log_system_bus, N_("Log system bus calls"), NULL },
+  { "installation", 0, 0, G_OPTION_ARG_STRING, &opt_custom_installation, N_("Work on custom installations"), NULL },
   { NULL }
 };
 
@@ -103,7 +105,17 @@ flatpak_builtin_run (int argc, char **argv, GCancellable *cancellable, GError **
       g_autoptr(FlatpakDir) user_dir = flatpak_dir_get_user ();
       g_autoptr(FlatpakDir) system_dir = flatpak_dir_get_system ();
 
-      app_ref = flatpak_dir_current_ref (user_dir, app, cancellable);
+      if (opt_custom_installation != NULL && *opt_custom_installation != '\0')
+        {
+          flatpak_set_custom_installation_path (opt_custom_installation);
+
+          g_autoptr(FlatpakDir) custom_dir = flatpak_dir_get_custom ();
+          if (custom_dir != NULL)
+            app_ref = flatpak_dir_current_ref (custom_dir, app, cancellable);
+        }
+
+      if (app_ref == NULL)
+        app_ref = flatpak_dir_current_ref (user_dir, app, cancellable);
       if (app_ref == NULL)
         app_ref = flatpak_dir_current_ref (system_dir, app, cancellable);
     }
@@ -137,14 +149,30 @@ flatpak_builtin_run (int argc, char **argv, GCancellable *cancellable, GError **
   return TRUE;
 }
 
+static void
+flatpak_complete_run_for_dir (FlatpakCompletion *completion, FlatpakDir *dir)
+{
+  int i;
+  g_autoptr(GError) error = NULL;
+  g_auto(GStrv) refs = flatpak_dir_find_installed_refs (dir, NULL, NULL, opt_arch,
+                                                        TRUE, FALSE, &error);
+  if (refs == NULL)
+    flatpak_completion_debug ("find local refs error: %s", error->message);
+  for (i = 0; refs != NULL && refs[i] != NULL; i++)
+    {
+      g_auto(GStrv) parts = flatpak_decompose_ref (refs[i], NULL);
+      if (parts)
+        flatpak_complete_word (completion, "%s ", parts[1]);
+    }
+}
+
 gboolean
 flatpak_complete_run (FlatpakCompletion *completion)
 {
   g_autoptr(GOptionContext) context = NULL;
+  g_autoptr(FlatpakDir) custom_dir = NULL;
   g_autoptr(FlatpakDir) user_dir = NULL;
   g_autoptr(FlatpakDir) system_dir = NULL;
-  g_autoptr(GError) error = NULL;
-  int i;
   g_autoptr(FlatpakContext) arg_context = NULL;
 
   context = g_option_context_new ("");
@@ -164,33 +192,16 @@ flatpak_complete_run (FlatpakCompletion *completion)
       flatpak_complete_options (completion, options);
       flatpak_context_complete (arg_context, completion);
 
+      /* flatpak_dir_get_custom() can return NULL, if not set. */
+      custom_dir = flatpak_dir_get_custom ();
+      if (custom_dir != NULL)
+        flatpak_complete_run_for_dir (completion, custom_dir);
+
       user_dir = flatpak_dir_get_user ();
-      {
-        g_auto(GStrv) refs = flatpak_dir_find_installed_refs (user_dir, NULL, NULL, opt_arch,
-                                                              TRUE, FALSE, &error);
-        if (refs == NULL)
-          flatpak_completion_debug ("find local refs error: %s", error->message);
-        for (i = 0; refs != NULL && refs[i] != NULL; i++)
-          {
-            g_auto(GStrv) parts = flatpak_decompose_ref (refs[i], NULL);
-            if (parts)
-              flatpak_complete_word (completion, "%s ", parts[1]);
-          }
-      }
+      flatpak_complete_run_for_dir (completion, user_dir);
 
       system_dir = flatpak_dir_get_system ();
-      {
-        g_auto(GStrv) refs = flatpak_dir_find_installed_refs (system_dir, NULL, NULL, opt_arch,
-                                                              TRUE, FALSE, &error);
-        if (refs == NULL)
-          flatpak_completion_debug ("find local refs error: %s", error->message);
-        for (i = 0; refs != NULL && refs[i] != NULL; i++)
-          {
-            g_auto(GStrv) parts = flatpak_decompose_ref (refs[i], NULL);
-            if (parts)
-              flatpak_complete_word (completion, "%s ", parts[1]);
-          }
-      }
+      flatpak_complete_run_for_dir (completion, system_dir);
 
       break;
 
