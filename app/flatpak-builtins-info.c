@@ -40,11 +40,13 @@ static gboolean opt_show_ref;
 static gboolean opt_show_commit;
 static gboolean opt_show_origin;
 static char *opt_arch;
+static char *opt_custom_installation;
 
 static GOptionEntry options[] = {
   { "arch", 0, 0, G_OPTION_ARG_STRING, &opt_arch, N_("Arch to use"), N_("ARCH") },
   { "user", 0, 0, G_OPTION_ARG_NONE, &opt_user, N_("Show user installations"), NULL },
   { "system", 0, 0, G_OPTION_ARG_NONE, &opt_system, N_("Show system-wide installations"), NULL },
+  { "installation", 0, 0, G_OPTION_ARG_STRING, &opt_custom_installation, N_("Show custom installations"), NULL },
   { "runtime", 0, 0, G_OPTION_ARG_NONE, &opt_runtime, N_("List installed runtimes"), NULL },
   { "app", 0, 0, G_OPTION_ARG_NONE, &opt_app, N_("List installed applications"), NULL },
   { "show-ref", 'r', 0, G_OPTION_ARG_NONE, &opt_show_ref, N_("Show ref"), NULL },
@@ -58,6 +60,7 @@ flatpak_builtin_info (int argc, char **argv, GCancellable *cancellable, GError *
 {
   g_autoptr(GOptionContext) context = NULL;
   g_autofree char *ref = NULL;
+  g_autoptr(FlatpakDir) custom_dir = NULL;
   g_autoptr(FlatpakDir) user_dir = NULL;
   g_autoptr(FlatpakDir) system_dir = NULL;
   FlatpakDir *dir = NULL;
@@ -92,7 +95,21 @@ flatpak_builtin_info (int argc, char **argv, GCancellable *cancellable, GError *
   if (!opt_user && !opt_system)
     opt_user = opt_system = TRUE;
 
-  if (opt_user)
+  if (opt_custom_installation != NULL && *opt_custom_installation != '\0')
+    {
+      flatpak_set_custom_installation_path (opt_custom_installation);
+      custom_dir = flatpak_dir_get_custom ();
+      ref = flatpak_dir_find_installed_ref (custom_dir,
+                                            name,
+                                            branch,
+                                            opt_arch,
+                                            opt_app, opt_runtime, &is_app,
+                                            &lookup_error);
+      if (ref)
+        dir = custom_dir;
+    }
+
+  if (ref == NULL && opt_user)
     {
       user_dir = flatpak_dir_get_user ();
 
@@ -101,7 +118,7 @@ flatpak_builtin_info (int argc, char **argv, GCancellable *cancellable, GError *
                                             branch,
                                             opt_arch,
                                             opt_app, opt_runtime, &is_app,
-                                            &lookup_error);
+                                            lookup_error == NULL ? &lookup_error : NULL);
       if (ref)
         dir = user_dir;
     }
