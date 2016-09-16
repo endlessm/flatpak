@@ -291,7 +291,7 @@ flatpak_installation_get_is_user (FlatpakInstallation *self)
 {
   g_autoptr(FlatpakDir) dir = flatpak_installation_get_dir (self);
 
-  return flatpak_dir_is_user (dir);
+  return flatpak_dir_get_dir_type (dir) == FLATPAK_DIR_TYPE_USER;
 }
 
 /**

@@ -84,6 +84,14 @@ typedef enum {
 
 #define FLATPAK_HELPER_CONFIGURE_REMOTE_FLAGS_ALL (FLATPAK_HELPER_CONFIGURE_REMOTE_FLAGS_FORCE_REMOVE)
 
+typedef enum {
+  FLATPAK_DIR_TYPE_SYSTEM = 0,
+  FLATPAK_DIR_TYPE_USER = 1 << 0,
+  FLATPAK_DIR_TYPE_CUSTOM = 1 << 1,
+} FlatpakDirType;
+
+#define FLATPAK_DIR_TYPE_ALL (FLATPAK_DIR_TYPE_CUSTOM)
+
 GQuark       flatpak_dir_error_quark (void);
 
 /**
@@ -101,16 +109,19 @@ GQuark       flatpak_dir_error_quark (void);
 GFile *  flatpak_get_system_base_dir_location (void);
 GFile *  flatpak_get_user_base_dir_location (void);
 
-GKeyFile *     flatpak_load_override_keyfile (const char *app_id,
-                                              gboolean    user,
-                                              GError    **error);
-FlatpakContext *flatpak_load_override_file (const char *app_id,
-                                            gboolean    user,
-                                            GError    **error);
-gboolean       flatpak_save_override_keyfile (GKeyFile   *metakey,
-                                              const char *app_id,
-                                              gboolean    user,
-                                              GError    **error);
+void     flatpak_set_custom_installation_path (const char *path);
+GFile *  flatpak_get_custom_base_dir_location (void);
+
+GKeyFile *     flatpak_load_override_keyfile (const char    *app_id,
+                                              FlatpakDirType type,
+                                              GError        **error);
+FlatpakContext *flatpak_load_override_file (const char    *app_id,
+                                            FlatpakDirType type,
+                                            GError       **error);
+gboolean       flatpak_save_override_keyfile (GKeyFile      *metakey,
+                                              const char    *app_id,
+                                              FlatpakDirType type,
+                                              GError       **error);
 
 const char *        flatpak_deploy_data_get_origin (GVariant *deploy_data);
 const char *        flatpak_deploy_data_get_commit (GVariant *deploy_data);
@@ -122,13 +133,14 @@ GFile *        flatpak_deploy_get_files (FlatpakDeploy *deploy);
 FlatpakContext *flatpak_deploy_get_overrides (FlatpakDeploy *deploy);
 GKeyFile *     flatpak_deploy_get_metadata (FlatpakDeploy *deploy);
 
-FlatpakDir *  flatpak_dir_new (GFile   *basedir,
-                               gboolean user);
+FlatpakDir *  flatpak_dir_new (GFile         *basedir,
+                               FlatpakDirType type);
 FlatpakDir *  flatpak_dir_clone (FlatpakDir *self);
-FlatpakDir  *flatpak_dir_get (gboolean user);
+FlatpakDir  *flatpak_dir_get (FlatpakDirType type);
 FlatpakDir  *flatpak_dir_get_system (void);
 FlatpakDir  *flatpak_dir_get_user (void);
-gboolean    flatpak_dir_is_user (FlatpakDir *self);
+FlatpakDir  *flatpak_dir_get_custom (void);
+FlatpakDirType flatpak_dir_get_dir_type (FlatpakDir *self);
 void        flatpak_dir_set_no_system_helper (FlatpakDir *self,
                                               gboolean    no_system_helper);
 GFile *     flatpak_dir_get_path (FlatpakDir *self);

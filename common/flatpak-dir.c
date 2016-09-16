@@ -65,7 +65,7 @@ struct FlatpakDir
 {
   GObject              parent;
 
-  gboolean             user;
+  FlatpakDirType       type;
   GFile               *basedir;
   OstreeRepo          *repo;
   gboolean             no_system_helper;
@@ -90,6 +90,7 @@ struct FlatpakDeploy
   GKeyFile       *metadata;
   FlatpakContext *system_overrides;
   FlatpakContext *user_overrides;
+  FlatpakContext *custom_overrides;
 };
 
 typedef struct
@@ -103,12 +104,32 @@ G_DEFINE_TYPE (FlatpakDeploy, flatpak_deploy, G_TYPE_OBJECT)
 enum {
   PROP_0,
 
-  PROP_USER,
+  PROP_TYPE,
   PROP_PATH
 };
 
 #define OSTREE_GIO_FAST_QUERYINFO ("standard::name,standard::type,standard::size,standard::is-symlink,standard::symlink-target," \
                                    "unix::device,unix::inode,unix::mode,unix::uid,unix::gid,unix::rdev")
+
+#define FLATPAK_TYPE_DIR_TYPE (flatpak_dir_type_get_type ())
+static GType
+flatpak_dir_type_get_type (void)
+{
+  static GType gtype = 0;
+
+  if (!gtype) {
+    static GEnumValue pattern_types[] = {
+      { FLATPAK_DIR_TYPE_SYSTEM, "System-wide installatoin", "system" },
+      { FLATPAK_DIR_TYPE_USER,  "User installation", "user" },
+      { FLATPAK_DIR_TYPE_CUSTOM, "Custom installation", "custom" },
+      { 0, NULL, NULL },
+    };
+
+    gtype = g_enum_register_static ("FlatpakDirType", pattern_types);
+  }
+
+  return gtype;
+}
 
 static GVariant *
 variant_new_ay_bytes (GBytes *bytes)
@@ -130,6 +151,7 @@ flatpak_deploy_finalize (GObject *object)
   g_clear_pointer (&self->metadata, g_key_file_unref);
   g_clear_pointer (&self->system_overrides, flatpak_context_free);
   g_clear_pointer (&self->user_overrides, flatpak_context_free);
+  g_clear_pointer (&self->custom_overrides, flatpak_context_free);
 
   G_OBJECT_CLASS (flatpak_deploy_parent_class)->finalize (object);
 }
@@ -170,6 +192,9 @@ flatpak_deploy_get_overrides (FlatpakDeploy *deploy)
 
   if (deploy->user_overrides)
     flatpak_context_merge (overrides, deploy->user_overrides);
+
+  if (deploy->custom_overrides)
+    flatpak_context_merge (overrides, deploy->custom_overrides);
 
   return overrides;
 }
@@ -233,6 +258,30 @@ flatpak_get_user_base_dir_location (void)
     }
 
   return g_object_ref ((GFile *)file);
+}
+
+/* Only one custom path is supported per execution */
+static char *custom_installation_path = NULL;
+
+void
+flatpak_set_custom_installation_path (const char *path)
+{
+  if (g_strcmp0 (custom_installation_path, path) == 0)
+    return;
+
+  g_free (custom_installation_path);
+  if (path == NULL || *path == '\0')
+    custom_installation_path = NULL;
+  else
+    custom_installation_path = g_strdup (path);
+}
+
+GFile *
+flatpak_get_custom_base_dir_location (void)
+{
+  if (custom_installation_path == NULL)
+    return NULL;
+  return g_file_new_for_path (custom_installation_path);
 }
 
 GFile *
@@ -301,7 +350,7 @@ flatpak_dir_use_system_helper (FlatpakDir *self)
 {
   FlatpakSystemHelper *system_helper;
 
-  if (self->no_system_helper || self->user || getuid () == 0)
+  if (self->no_system_helper || self->type != FLATPAK_DIR_TYPE_SYSTEM || getuid () == 0)
     return FALSE;
 
   system_helper = flatpak_dir_get_system_helper (self);
@@ -348,8 +397,8 @@ flatpak_dir_set_property (GObject      *object,
       self->basedir = g_file_new_for_path (flatpak_file_get_path_cached (g_value_get_object (value)));
       break;
 
-    case PROP_USER:
-      self->user = g_value_get_boolean (value);
+    case PROP_TYPE:
+      self->type = g_value_get_enum (value);
       break;
 
     default:
@@ -372,8 +421,8 @@ flatpak_dir_get_property (GObject    *object,
       g_value_set_object (value, self->basedir);
       break;
 
-    case PROP_USER:
-      g_value_set_boolean (value, self->user);
+    case PROP_TYPE:
+      g_value_set_enum (value, self->type);
       break;
 
     default:
@@ -392,12 +441,13 @@ flatpak_dir_class_init (FlatpakDirClass *klass)
   object_class->finalize = flatpak_dir_finalize;
 
   g_object_class_install_property (object_class,
-                                   PROP_USER,
-                                   g_param_spec_boolean ("user",
-                                                         "",
-                                                         "",
-                                                         FALSE,
-                                                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
+                                   PROP_TYPE,
+                                   g_param_spec_enum ("type",
+                                                      "",
+                                                      "",
+                                                      FLATPAK_TYPE_DIR_TYPE,
+                                                      FLATPAK_DIR_TYPE_SYSTEM,
+                                                      G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
   g_object_class_install_property (object_class,
                                    PROP_PATH,
                                    g_param_spec_object ("path",
@@ -412,10 +462,10 @@ flatpak_dir_init (FlatpakDir *self)
 {
 }
 
-gboolean
-flatpak_dir_is_user (FlatpakDir *self)
+FlatpakDirType
+flatpak_dir_get_dir_type (FlatpakDir *self)
 {
-  return self->user;
+  return self->type;
 }
 
 void
@@ -462,7 +512,7 @@ flatpak_dir_load_override (FlatpakDir *self,
 }
 
 GKeyFile *
-flatpak_load_override_keyfile (const char *app_id, gboolean user, GError **error)
+flatpak_load_override_keyfile (const char *app_id, FlatpakDirType type, GError **error)
 {
   g_autofree char *metadata_contents = NULL;
   gsize metadata_size;
@@ -470,7 +520,7 @@ flatpak_load_override_keyfile (const char *app_id, gboolean user, GError **error
   g_autoptr(GKeyFile) metakey = g_key_file_new ();
   g_autoptr(FlatpakDir) dir = NULL;
 
-  dir = flatpak_dir_get (user);
+  dir = flatpak_dir_get (type);
 
   metadata_contents = flatpak_dir_load_override (dir, app_id, &metadata_size, error);
   if (metadata_contents == NULL)
@@ -486,14 +536,14 @@ flatpak_load_override_keyfile (const char *app_id, gboolean user, GError **error
 }
 
 FlatpakContext *
-flatpak_load_override_file (const char *app_id, gboolean user, GError **error)
+flatpak_load_override_file (const char *app_id, FlatpakDirType type, GError **error)
 {
   g_autoptr(FlatpakContext) overrides = flatpak_context_new ();
 
   g_autoptr(GKeyFile) metakey = NULL;
   g_autoptr(GError) my_error = NULL;
 
-  metakey = flatpak_load_override_keyfile (app_id, user, &my_error);
+  metakey = flatpak_load_override_keyfile (app_id, type, &my_error);
   if (metakey == NULL)
     {
       if (!g_error_matches (my_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
@@ -512,10 +562,10 @@ flatpak_load_override_file (const char *app_id, gboolean user, GError **error)
 }
 
 gboolean
-flatpak_save_override_keyfile (GKeyFile   *metakey,
-                               const char *app_id,
-                               gboolean    user,
-                               GError    **error)
+flatpak_save_override_keyfile (GKeyFile      *metakey,
+                               const char    *app_id,
+                               FlatpakDirType type,
+                               GError       **error)
 {
   g_autoptr(GFile) base_dir = NULL;
   g_autoptr(GFile) override_dir = NULL;
@@ -523,11 +573,23 @@ flatpak_save_override_keyfile (GKeyFile   *metakey,
   g_autofree char *filename = NULL;
   g_autofree char *parent = NULL;
 
-  if (user)
-    base_dir = flatpak_get_user_base_dir_location ();
-  else
-    base_dir = flatpak_get_system_base_dir_location ();
+  switch (type)
+  {
+  case FLATPAK_DIR_TYPE_CUSTOM:
+    base_dir = flatpak_get_custom_base_dir_location ();
+    break;
 
+  case FLATPAK_DIR_TYPE_USER:
+    base_dir = flatpak_get_user_base_dir_location ();
+    break;
+
+  case FLATPAK_DIR_TYPE_SYSTEM:
+    base_dir = flatpak_get_system_base_dir_location ();
+    break;
+
+  default:
+    g_assert_not_reached ();
+  }
   override_dir = g_file_get_child (base_dir, "overrides");
   file = g_file_get_child (override_dir, app_id);
 
@@ -582,17 +644,25 @@ flatpak_dir_load_deployed (FlatpakDir   *self,
   if (strcmp (ref_parts[0], "app") == 0)
     {
       /* Only load system overrides for system installed apps */
-      if (!self->user)
+      if (self->type == FLATPAK_DIR_TYPE_SYSTEM)
         {
-          deploy->system_overrides = flatpak_load_override_file (ref_parts[1], FALSE, error);
+          deploy->system_overrides = flatpak_load_override_file (ref_parts[1], FLATPAK_DIR_TYPE_SYSTEM, error);
           if (deploy->system_overrides == NULL)
             return NULL;
         }
 
       /* Always load user overrides */
-      deploy->user_overrides = flatpak_load_override_file (ref_parts[1], TRUE, error);
+      deploy->user_overrides = flatpak_load_override_file (ref_parts[1], FLATPAK_DIR_TYPE_USER, error);
       if (deploy->user_overrides == NULL)
         return NULL;
+
+      /* Load custom overrides if the relevant path was defined */
+      if (custom_installation_path != NULL)
+        {
+          deploy->custom_overrides = flatpak_load_override_file (ref_parts[1], FLATPAK_DIR_TYPE_CUSTOM, error);
+          if (deploy->custom_overrides == NULL)
+            return NULL;
+        }
     }
 
   return deploy;
@@ -888,7 +958,7 @@ flatpak_dir_ensure_repo (FlatpakDir   *self,
         goto out;
 
       repodir = g_file_get_child (self->basedir, "repo");
-      if (self->no_system_helper || self->user || getuid () == 0)
+      if (self->no_system_helper || self->type != FLATPAK_DIR_TYPE_SYSTEM || getuid () == 0)
         {
           repo = ostree_repo_new (repodir);
         }
@@ -2977,7 +3047,7 @@ flatpak_dir_create_system_child_repo (FlatpakDir   *self,
   g_autoptr(OstreeRepo) new_repo = NULL;
   g_autoptr(GKeyFile) config = NULL;
 
-  g_assert (!self->user);
+  g_assert (self->type == FLATPAK_DIR_TYPE_SYSTEM);
 
   if (!flatpak_dir_ensure_repo (self, NULL, error))
     return NULL;
@@ -4610,37 +4680,46 @@ flatpak_dir_find_installed_ref (FlatpakDir *self,
 }
 
 FlatpakDir *
-flatpak_dir_new (GFile *path, gboolean user)
+flatpak_dir_new (GFile *path, FlatpakDirType type)
 {
-  return g_object_new (FLATPAK_TYPE_DIR, "path", path, "user", user, NULL);
+  return g_object_new (FLATPAK_TYPE_DIR, "path", path, "type", type, NULL);
 }
 
 FlatpakDir *
 flatpak_dir_clone (FlatpakDir *self)
 {
-  return flatpak_dir_new (self->basedir, self->user);
+  return flatpak_dir_new (self->basedir, self->type);
 }
 
 FlatpakDir *
 flatpak_dir_get_system (void)
 {
   g_autoptr(GFile) path = flatpak_get_system_base_dir_location ();
-  return flatpak_dir_new (path, FALSE);
+  return flatpak_dir_new (path, FLATPAK_DIR_TYPE_SYSTEM);
 }
 
 FlatpakDir *
 flatpak_dir_get_user (void)
 {
   g_autoptr(GFile) path = flatpak_get_user_base_dir_location ();
-  return flatpak_dir_new (path, TRUE);
+  return flatpak_dir_new (path, FLATPAK_DIR_TYPE_USER);
 }
 
 FlatpakDir *
-flatpak_dir_get (gboolean user)
+flatpak_dir_get_custom (void)
 {
-  if (user)
+  g_autoptr(GFile) path = flatpak_get_custom_base_dir_location ();
+  return path == NULL ? NULL : flatpak_dir_new (path, FLATPAK_DIR_TYPE_CUSTOM);
+}
+
+FlatpakDir *
+flatpak_dir_get (FlatpakDirType type)
+{
+  if (type == FLATPAK_DIR_TYPE_CUSTOM)
+    return flatpak_dir_get_custom ();
+  else if (type == FLATPAK_DIR_TYPE_USER)
     return flatpak_dir_get_user ();
-  else
+  else /* type == FLATPAK_DIR_TYPE_SYSTEM */
     return flatpak_dir_get_system ();
 }
 

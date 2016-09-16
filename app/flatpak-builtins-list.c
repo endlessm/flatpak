@@ -75,6 +75,20 @@ join_strv (char **a, char **b)
 }
 
 static gboolean
+print_installed_refs_for_dir (FlatpakDir *dir, GStrv *app, GStrv *runtime, GCancellable *cancellable, GError **error)
+{
+  if (flatpak_dir_ensure_repo (dir, cancellable, NULL))
+    {
+      if (app != NULL && !flatpak_dir_list_refs (dir, "app", app, cancellable, error))
+        return FALSE;
+      if (runtime != NULL && !flatpak_dir_list_refs (dir, "runtime", runtime, cancellable, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+static gboolean
 print_installed_refs (gboolean app, gboolean runtime, gboolean print_system, gboolean print_user, const char *arch, GCancellable *cancellable, GError **error)
 {
   g_autofree char *last = NULL;
@@ -91,27 +105,24 @@ print_installed_refs (gboolean app, gboolean runtime, gboolean print_system, gbo
 
   if (print_user)
     {
-      user_dir = flatpak_dir_get (TRUE);
-
-      if (flatpak_dir_ensure_repo (user_dir, cancellable, NULL))
-        {
-          if (app && !flatpak_dir_list_refs (user_dir, "app", &user_app, cancellable, error))
-            return FALSE;
-          if (runtime && !flatpak_dir_list_refs (user_dir, "runtime", &user_runtime, cancellable, error))
-            return FALSE;
-        }
+      user_dir = flatpak_dir_get (FLATPAK_DIR_TYPE_USER);
+      if (!print_installed_refs_for_dir (user_dir,
+                                         app ? &user_app : NULL,
+                                         runtime ? &user_runtime : NULL,
+                                         cancellable,
+                                         error))
+        return FALSE;
     }
 
   if (print_system)
     {
-      system_dir = flatpak_dir_get (FALSE);
-      if (flatpak_dir_ensure_repo (system_dir, cancellable, NULL))
-        {
-          if (app && !flatpak_dir_list_refs (system_dir, "app", &system_app, cancellable, error))
-            return FALSE;
-          if (runtime && !flatpak_dir_list_refs (system_dir, "runtime", &system_runtime, cancellable, error))
-            return FALSE;
-        }
+      system_dir = flatpak_dir_get (FLATPAK_DIR_TYPE_SYSTEM);
+      if (!print_installed_refs_for_dir (system_dir,
+                                         app ? &system_app : NULL,
+                                         runtime ? &system_runtime : NULL,
+                                         cancellable,
+                                         error))
+        return FALSE;
     }
 
   FlatpakTablePrinter *printer = flatpak_table_printer_new ();

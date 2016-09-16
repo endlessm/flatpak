@@ -234,7 +234,9 @@ flatpak_option_context_parse (GOptionContext     *context,
 
   if (!(flags & FLATPAK_BUILTIN_FLAG_NO_DIR))
     {
-      dir = flatpak_dir_get (opt_user);
+      dir = flatpak_dir_get (FLATPAK_DIR_TYPE_CUSTOM);
+      if (dir == NULL)
+        dir = flatpak_dir_get (opt_user ? FLATPAK_DIR_TYPE_USER : FLATPAK_DIR_TYPE_SYSTEM);
 
       if (!flatpak_dir_ensure_path (dir, cancellable, error))
         return FALSE;
