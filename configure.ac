@@ -249,6 +249,14 @@ AC_ARG_WITH(system-install-dir,
 SYSTEM_INSTALL_DIR=$with_system_install_dir
 AC_SUBST(SYSTEM_INSTALL_DIR)
 
+AC_ARG_WITH(external-install-dir,
+           [AS_HELP_STRING([--with-external-install-dir=DIR],
+                           [Location of the external installation [LOCALSTATEDIR/endless-extra/flatpak]])],
+           [],
+           [with_external_install_dir='$(localstatedir)/endless-extra/flatpak'])
+EXTERNAL_INSTALL_DIR=$with_external_install_dir
+AC_SUBST(EXTERNAL_INSTALL_DIR)
+
 dnl This only checks for the header, not the library.
 AC_ARG_WITH([dwarf-header],
             [AS_HELP_STRING([--with-dwarf-header],
