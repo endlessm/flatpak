@@ -42,6 +42,7 @@ override_dh_auto_configure:
 		--with-privileged-group=sudo \
 		--with-system-bubblewrap=bwrap \
 		--with-systemdsystemunitdir=/lib/systemd/system \
+		--with-external-install-dir=/var/endless-extra/flatpak \
 		$(configure_options)
 
 override_dh_install:
