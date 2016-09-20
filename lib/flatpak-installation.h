@@ -84,6 +84,9 @@ FLATPAK_EXTERN FlatpakInstallation *flatpak_installation_new_system (GCancellabl
                                                                      GError      **error);
 FLATPAK_EXTERN FlatpakInstallation *flatpak_installation_new_user (GCancellable *cancellable,
                                                                    GError      **error);
+FLATPAK_EXTERN FlatpakInstallation *flatpak_installation_new_custom (GFile        *path,
+                                                                     GCancellable *cancellable,
+                                                                     GError      **error);
 FLATPAK_EXTERN FlatpakInstallation *flatpak_installation_new_for_path (GFile        *path,
                                                                        gboolean      user,
                                                                        GCancellable *cancellable,
@@ -111,6 +114,7 @@ FLATPAK_EXTERN gboolean             flatpak_installation_drop_caches (FlatpakIns
                                                                       GCancellable        *cancellable,
                                                                       GError             **error);
 FLATPAK_EXTERN gboolean             flatpak_installation_get_is_user (FlatpakInstallation *self);
+FLATPAK_EXTERN gboolean             flatpak_installation_get_is_custom (FlatpakInstallation *self);
 FLATPAK_EXTERN GFile               *flatpak_installation_get_path (FlatpakInstallation *self);
 FLATPAK_EXTERN gboolean             flatpak_installation_launch (FlatpakInstallation *self,
                                                                  const char          *name,

@@ -61,7 +61,6 @@ struct _FlatpakInstallationPrivate
      flatpak_installation_drop_caches(), so every user needs to keep its own reference alive until
      done. */
   FlatpakDir *dir_unlocked;
-  gboolean is_custom;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (FlatpakInstallation, flatpak_installation, G_TYPE_OBJECT)
@@ -125,9 +124,6 @@ flatpak_installation_class_init (FlatpakInstallationClass *klass)
 static void
 flatpak_installation_init (FlatpakInstallation *self)
 {
-  FlatpakInstallationPrivate *priv = flatpak_installation_get_instance_private (self);
-
-  priv->is_custom = FALSE;
 }
 
 static FlatpakInstallation *
@@ -225,24 +221,39 @@ flatpak_installation_new_user (GCancellable *cancellable,
  * Returns: (transfer full): a new #FlatpakInstallation
  */
 FlatpakInstallation *
-flatpak_installation_new_for_path (GFile *path, gboolean user,
-                                   GCancellable *cancellable,
-                                   GError **error)
+flatpak_installation_new_custom (GFile *path,
+                                 GCancellable *cancellable,
+                                 GError **error)
 {
   g_autofree gchar *path_string = NULL;
   FlatpakInstallation *installation = NULL;
   FlatpakInstallationPrivate *priv = NULL;
 
-  flatpak_migrate_from_xdg_app ();
-
   path_string = g_file_get_path (path);
   flatpak_set_custom_installation_path (path_string);
 
-  installation = flatpak_installation_new_for_dir (flatpak_dir_get_custom (), cancellable, error);
-  priv = flatpak_installation_get_instance_private (installation);
-  priv->is_custom = TRUE;
+  return flatpak_installation_new_for_dir (flatpak_dir_get_custom (), cancellable, error);
+}
 
-  return installation;
+/**
+ * flatpak_installation_new_for_path:
+ * @path: a #GFile
+ * @user: whether this is a user-specific location
+ * @cancellable: (nullable): a #GCancellable
+ * @error: return location for a #GError
+ *
+ * Creates a new #FlatpakInstallation for the installation at the given @path.
+ *
+ * Returns: (transfer full): a new #FlatpakInstallation
+ */
+FlatpakInstallation *
+flatpak_installation_new_for_path (GFile *path, gboolean user,
+                                   GCancellable *cancellable,
+                                   GError **error)
+{
+  flatpak_migrate_from_xdg_app ();
+
+  return flatpak_installation_new_for_dir (flatpak_dir_new (path, user), cancellable, error);
 }
 
 static FlatpakDir *
@@ -307,6 +318,22 @@ flatpak_installation_get_is_user (FlatpakInstallation *self)
   g_autoptr(FlatpakDir) dir = flatpak_installation_get_dir (self);
 
   return flatpak_dir_get_dir_type (dir) == FLATPAK_DIR_TYPE_USER;
+}
+
+/**
+ * flatpak_installation_get_is_custom:
+ * @self: a #FlatpakInstallation
+ *
+ * Returns whether the installation is for a custom location.
+ *
+ * Returns: %TRUE if @self is a custom installation
+ */
+gboolean
+flatpak_installation_get_is_custom (FlatpakInstallation *self)
+{
+  g_autoptr(FlatpakDir) dir = flatpak_installation_get_dir (self);
+
+  return flatpak_dir_get_dir_type (dir) == FLATPAK_DIR_TYPE_CUSTOM;
 }
 
 /**
