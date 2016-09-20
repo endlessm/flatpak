@@ -40,6 +40,7 @@ FLATPAK_BINDIR=$(bindir)
 AM_CPPFLAGS =							\
 	-DFLATPAK_BINDIR=\"$(FLATPAK_BINDIR)\"			\
 	-DFLATPAK_SYSTEMDIR=\"$(SYSTEM_INSTALL_DIR)\"		\
+	-DFLATPAK_EXTERNALDIR=\"$(EXTERNAL_INSTALL_DIR)\"	\
 	-DFLATPAK_CONFIGDIR=\"$(sysconfdir)/flatpak\"		\
 	-DFLATPAK_BASEDIR=\"$(pkgdatadir)\"			\
 	-DFLATPAK_TRIGGERDIR=\"$(pkgdatadir)/triggers\"		\
