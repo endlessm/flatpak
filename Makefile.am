@@ -41,6 +41,7 @@ ACLOCAL_AMFLAGS = -I m4 -I libglnx ${ACLOCAL_FLAGS}
 AM_CPPFLAGS =							\
 	-DFLATPAK_BINDIR=\"$(FLATPAK_BINDIR)\"			\
 	-DFLATPAK_SYSTEMDIR=\"$(SYSTEM_INSTALL_DIR)\"		\
+	-DFLATPAK_EXTERNALDIR=\"$(EXTERNAL_INSTALL_DIR)\"	\
 	-DFLATPAK_CONFIGDIR=\"$(sysconfdir)/flatpak\"		\
 	-DFLATPAK_BASEDIR=\"$(pkgdatadir)\"			\
 	-DFLATPAK_TRIGGERDIR=\"$(pkgdatadir)/triggers\"		\
