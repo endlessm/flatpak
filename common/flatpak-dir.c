@@ -192,6 +192,15 @@ flatpak_deploy_new (GFile *dir, GKeyFile *metadata)
   return deploy;
 }
 
+static gboolean
+is_valid_external_location (const char *path)
+{
+  if (path == NULL || !g_path_is_absolute (path))
+    return FALSE;
+
+  return g_file_test (path, G_FILE_TEST_IS_DIR);
+}
+
 GFile *
 flatpak_get_system_base_dir_location (void)
 {
@@ -203,6 +212,8 @@ flatpak_get_system_base_dir_location (void)
       const char *system_dir = g_getenv ("FLATPAK_SYSTEM_DIR");
       if (system_dir != NULL)
         setup_value = (gsize)system_dir;
+      else if (is_valid_external_location (FLATPAK_EXTERNALDIR))
+        setup_value = (gsize)FLATPAK_EXTERNALDIR;
       else
         setup_value = (gsize)FLATPAK_SYSTEMDIR;
       g_once_init_leave (&path, setup_value);
