@@ -25,6 +25,7 @@ SUBDIRS += po
 %.service: %.service.in config.log
 	$(AM_V_GEN) $(SED) -e "s|\@libexecdir\@|$(libexecdir)|" \
 		-e "s|\@localstatedir\@|$(localstatedir)|" \
+		-e "s|\@externalinstalldir\@|$(EXTERNAL_INSTALL_DIR)|" \
 		-e "s|\@extraargs\@||" $< > $@
 
 dbus_servicedir = $(DBUS_SERVICE_DIR)
@@ -133,7 +134,9 @@ DISTCLEANFILES += flatpak.sh
 
 flatpak.sh: profile/flatpak.sh.in
 	$(AM_V_GEN) $(SED) -e "s|\@localstatedir\@|$(localstatedir)|" \
-		-e "s|\@sysconfdir\@|$(sysconfdir)|" $< > $@
+		-e "s|\@sysconfdir\@|$(sysconfdir)|" \
+		-e "s|\@externalinstalldir\@|$(EXTERNAL_INSTALL_DIR)|" \
+		$< > $@
 
 envdir = $(datadir)/gdm/env.d
 env_DATA = flatpak.env
@@ -142,7 +145,9 @@ DISTCLEANFILES += flatpak.env
 
 flatpak.env: env.d/flatpak.env.in
 	$(AM_V_GEN) $(SED) -e "s|\@localstatedir\@|$(localstatedir)|" \
-		-e "s|\@sysconfdir\@|$(sysconfdir)|" $< > $@
+		-e "s|\@sysconfdir\@|$(sysconfdir)|" \
+		-e "s|\@externalinstalldir\@|$(EXTERNAL_INSTALL_DIR)|" \
+		$< > $@
 
 dbussnippetdir = $(systemduserunitdir)/dbus.service.d
 dbussnippet_DATA = flatpak.conf
@@ -151,7 +156,9 @@ DISTCLEANFILES += flatpak.conf
 
 flatpak.conf: dbus.service.d/flatpak.conf.in
 	$(AM_V_GEN) $(SED) -e "s|\@localstatedir\@|$(localstatedir)|" \
-		-e "s|\@sysconfdir\@|$(sysconfdir)|" $< > $@
+		-e "s|\@sysconfdir\@|$(sysconfdir)|" \
+		-e "s|\@externalinstalldir\@|$(EXTERNAL_INSTALL_DIR)|" \
+		$< > $@
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = flatpak.pc
