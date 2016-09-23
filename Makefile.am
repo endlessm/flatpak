@@ -25,6 +25,7 @@ SUBDIRS += po
 %.service: %.service.in config.log
 	$(AM_V_GEN) $(SED) -e "s|\@libexecdir\@|$(libexecdir)|" \
 		-e "s|\@localstatedir\@|$(localstatedir)|" \
+		-e "s|\@externalinstalldir\@|$(EXTERNAL_INSTALL_DIR)|" \
 		-e "s|\@media_dir\@|$(RUN_MEDIA_DIR)|" \
 		-e "s|\@extraargs\@||" $< > $@
 
@@ -167,7 +168,9 @@ DISTCLEANFILES += flatpak.env
 
 flatpak.env: env.d/flatpak.env.in
 	$(AM_V_GEN) $(SED) -e "s|\@localstatedir\@|$(localstatedir)|" \
-		-e "s|\@sysconfdir\@|$(sysconfdir)|" $< > $@
+		-e "s|\@sysconfdir\@|$(sysconfdir)|" \
+		-e "s|\@externalinstalldir\@|$(EXTERNAL_INSTALL_DIR)|" \
+		$< > $@
 
 envgendir = $(systemduserenvgendir)
 envgen_SCRIPTS = env.d/60-flatpak
