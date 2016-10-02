@@ -193,6 +193,13 @@ flatpak (0.6.12-1) unstable; urgency=medium
 
  -- Simon McVittie <smcv@debian.org>  Fri, 07 Oct 2016 22:41:21 +0100
 
+flatpak (0.6.11-1~bpo8+2) jessie-backports; urgency=medium
+
+  * (Build-)depend on libgtk-3-bin, not gtk-update-icon-cache,
+    for the jessie backport
+
+ -- Simon McVittie <smcv@debian.org>  Sun, 02 Oct 2016 10:43:17 +0100
+
 flatpak (0.6.11-1) unstable; urgency=medium
 
   * New upstream release
