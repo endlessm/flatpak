@@ -443,6 +443,15 @@ flatpak_is_valid_name (const char *string,
       goto out;
     }
 
+  /* Endless has some legacy apps to export files named "org.foo.Bar-search-provider.*".
+     To avoid conflicts for we then forbid app names ending with "-search-provider". */
+  if (G_UNLIKELY (g_str_has_suffix (string, "-search-provider")))
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Name are not allowed to end with '-search-provider'");
+      goto out;
+    }
+
   end = string + len;
 
   s = string;
@@ -517,7 +526,11 @@ flatpak_has_name_prefix (const char *string,
     *rest == '.' ||
     !is_valid_name_character (*rest) ||
     /* Special case -symbolic icon names */
-    g_str_has_prefix (rest, "-symbolic.");
+    g_str_has_prefix (rest, "-symbolic.") ||
+    /* HACK! Special case for old endless search provider names. Could possibly
+     * cause problems if anyone is installing app's who's IDs end in
+     * -search-provider, but unlikely. */
+    g_str_has_prefix (rest, "-search-provider.");
 }
 
 static gboolean
