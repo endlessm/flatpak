@@ -1,0 +1,37 @@
+#!/bin/sh
+
+set -e
+exec 2>&1
+
+e=0
+
+# Don't pollute the home directory unless this looks like a dedicated
+# autopkgtest environment
+if [ "$(id -nu)" = adt ]; then
+	install -d ~/.flatpak-tests/
+fi
+
+gnome-desktop-testing-runner -l Flatpak | while read t; do
+	t="${t%% *}"
+
+	case "$t" in
+		(Flatpak/test-builder.sh.test)
+			# has more dependencies
+			continue
+			;;
+
+		(Flatpak/test-extensions.sh.test)
+			# fails to clean up on ci.debian.net and I can't
+			# reproduce it under LXC locally
+			continue
+			;;
+	esac
+
+	gnome-desktop-testing-runner "$t" < /dev/null || touch "$ADTTMP"/failed
+done
+
+if [ -e "$ADTTMP"/failed ]; then
+	exit 1
+fi
+
+exit 0
