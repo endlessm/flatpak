@@ -7246,25 +7246,25 @@ flatpak_dir_update_remote_configuration (FlatpakDir   *self,
     if (flatpak_dir_use_system_helper (self))
       {
         FlatpakSystemHelper *system_helper;
-        g_autofree char *config_data = g_key_file_to_data (config, NULL, NULL);
-        g_autoptr(GVariant) gpg_data_v = NULL;
+        g_autofree char *title = NULL;
+        g_autofree char *default_branch = NULL;
         const char *installation = flatpak_dir_get_id (self);
 
-        gpg_data_v = g_variant_ref_sink (g_variant_new_from_data (G_VARIANT_TYPE ("ay"), "", 0, TRUE, NULL, NULL));
+        title = g_key_file_get_string (config, group, "xa.title", NULL);
+        default_branch = g_key_file_get_string (config, group, "xa.default-branch", NULL);
 
         system_helper = flatpak_dir_get_system_helper (self);
         g_assert (system_helper != NULL);
 
-        g_debug ("Calling system helper: ConfigureRemote");
-        if (!flatpak_system_helper_call_configure_remote_sync (system_helper,
-                                                               0, remote,
-                                                               config_data,
-                                                               gpg_data_v,
-                                                               installation ? installation : "",
-                                                               cancellable, error))
-          return FALSE;
+        g_debug ("Calling system helper: UpdateRemote");
+        if (!flatpak_system_helper_call_update_remote_sync (system_helper,
+                                                            remote,
+                                                            title != NULL ? title : "",
+                                                            default_branch ? default_branch : "",
+                                                            installation ? installation : "",
+                                                            cancellable, error))
 
-        return TRUE;
+          return TRUE;
       }
 
     /* Update the local remote configuration with the updated info. */
