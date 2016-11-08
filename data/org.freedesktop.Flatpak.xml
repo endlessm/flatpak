@@ -99,6 +99,13 @@
       <arg type='s' name='installation' direction='in'/>
     </method>
 
+    <method name="UpdateRemote">
+      <arg type='s' name='remote' direction='in'/>
+      <arg type='s' name='title' direction='in'/>
+      <arg type='s' name='default_branch' direction='in'/>
+      <arg type='s' name='installation' direction='in'/>
+    </method>
+
   </interface>
 
 </node>
