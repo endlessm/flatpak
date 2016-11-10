@@ -6232,9 +6232,10 @@ flatpak_dir_update_remote_configuration (FlatpakDir   *self,
 
   g_autoptr(GVariant) summary = NULL;
   g_autoptr(GVariant) extensions = NULL;
-  g_autoptr(GPtrArray) updated_params = g_ptr_array_new_with_free_func (g_free);
+  g_autoptr(GPtrArray) updated_params = NULL;
   GVariantIter iter;
 
+  updated_params = g_ptr_array_new_with_free_func (g_free);
   summary = fetch_remote_summary_file (self, remote, cancellable, error);
   if (summary == NULL)
     return FALSE;
@@ -6270,6 +6271,7 @@ flatpak_dir_update_remote_configuration (FlatpakDir   *self,
   {
     g_autoptr(GKeyFile) config = NULL;
     g_autofree char *group = NULL;
+    gboolean has_changed = FALSE;
     int i;
 
     config = ostree_repo_copy_config (flatpak_dir_get_repo (self));
@@ -6280,10 +6282,43 @@ flatpak_dir_update_remote_configuration (FlatpakDir   *self,
       {
         /* This array should have an even number of elements with
            keys in the odd positions and values on even ones. */
-        g_key_file_set_string (config, group,
-                               g_ptr_array_index (updated_params, i),
-                               g_ptr_array_index (updated_params, i+1));
+        const char *key = g_ptr_array_index (updated_params, i);
+        const char *new_val = g_ptr_array_index (updated_params, i+1);
+        g_autofree char *current_val = NULL;
+
+        current_val = g_key_file_get_string (config, group, key, NULL);
+        if (g_strcmp0 (current_val, new_val) != 0)
+          {
+            has_changed = TRUE;
+            g_key_file_set_string (config, group, key, new_val);
+          }
+
         i += 2;
+      }
+
+    if (!has_changed)
+      return TRUE;
+
+    if (flatpak_dir_use_system_helper (self))
+      {
+        FlatpakSystemHelper *system_helper;
+        g_autofree char *config_data = g_key_file_to_data (config, NULL, NULL);
+        g_autoptr(GVariant) gpg_data_v = NULL;
+
+        gpg_data_v = g_variant_ref_sink (g_variant_new_from_data (G_VARIANT_TYPE ("ay"), "", 0, TRUE, NULL, NULL));
+
+        system_helper = flatpak_dir_get_system_helper (self);
+        g_assert (system_helper != NULL);
+
+        g_debug ("Calling system helper: ConfigureRemote");
+        if (!flatpak_system_helper_call_configure_remote_sync (system_helper,
+                                                               0, remote,
+                                                               config_data,
+                                                               gpg_data_v,
+                                                               cancellable, error))
+          return FALSE;
+
+        return TRUE;
       }
 
     /* Update the local remote configuration with the updated info. */
