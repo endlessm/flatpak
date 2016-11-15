@@ -56,9 +56,13 @@ gboolean builder_module_download_sources (BuilderModule  *self,
                                           BuilderContext *context,
                                           GError        **error);
 gboolean builder_module_extract_sources (BuilderModule  *self,
-                                         GFile          *dest,
+                                         gboolean        update_vcs,
                                          BuilderContext *context,
                                          GError        **error);
+gboolean builder_module_extract_sources_helper (BuilderModule  *self,
+                                                GFile          *dest,
+                                                BuilderContext *context,
+                                                GError        **error);
 gboolean builder_module_build (BuilderModule  *self,
                                BuilderCache   *cache,
                                BuilderContext *context,

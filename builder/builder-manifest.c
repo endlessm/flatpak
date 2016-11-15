@@ -1293,6 +1293,26 @@ builder_manifest_download (BuilderManifest *self,
 }
 
 gboolean
+builder_manifest_extract (BuilderManifest *self,
+                          gboolean         update_vcs,
+                          BuilderContext  *context,
+                          GError         **error)
+{
+  GList *l;
+
+  g_print ("Extracting sources\n");
+  for (l = self->expanded_modules; l != NULL; l = l->next)
+    {
+      BuilderModule *m = l->data;
+
+      if (!builder_module_extract_sources (m, update_vcs, context, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+gboolean
 builder_manifest_build (BuilderManifest *self,
                         BuilderCache    *cache,
                         BuilderContext  *context,

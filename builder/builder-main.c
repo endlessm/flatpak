@@ -36,6 +36,7 @@ static gboolean opt_version;
 static gboolean opt_run;
 static gboolean opt_disable_cache;
 static gboolean opt_download_only;
+static gboolean opt_extract_only;
 static gboolean opt_build_only;
 static gboolean opt_finish_only;
 static gboolean opt_show_deps;
@@ -65,6 +66,7 @@ static GOptionEntry entries[] = {
   { "disable-download", 0, 0, G_OPTION_ARG_NONE, &opt_disable_download, "Don't download any new sources", NULL },
   { "disable-updates", 0, 0, G_OPTION_ARG_NONE, &opt_disable_updates, "Only download missing sources, never update to latest vcs version", NULL },
   { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Only download sources, don't build", NULL },
+  { "extract-only", 0, 0, G_OPTION_ARG_NONE, &opt_extract_only, "Only download and extract sources, don't build", NULL },
   { "build-only", 0, 0, G_OPTION_ARG_NONE, &opt_build_only, "Stop after build, don't run clean and finish phases", NULL },
   { "finish-only", 0, 0, G_OPTION_ARG_NONE, &opt_finish_only, "Only run clean and finish and export phases", NULL },
   { "allow-missing-runtimes", 0, 0, G_OPTION_ARG_NONE, &opt_allow_missing_runtimes, "Don't fail if runtime and sdk missing", NULL },
@@ -405,6 +407,16 @@ main (int    argc,
     }
 
   if (opt_download_only)
+    return 0;
+
+  if (!opt_disable_download &&
+      !builder_manifest_extract (manifest, !opt_disable_updates, build_context, &error))
+    {
+      g_printerr ("Failed to extract sources: %s\n", error->message);
+      return 1;
+    }
+
+  if (opt_extract_only)
     return 0;
 
   cache_branch = g_path_get_basename (manifest_path);
