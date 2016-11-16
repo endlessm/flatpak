@@ -512,6 +512,53 @@ handle_configure_remote (FlatpakSystemHelper *object,
 }
 
 static gboolean
+handle_update_remote (FlatpakSystemHelper *object,
+                      GDBusMethodInvocation *invocation,
+                      const gchar *arg_remote,
+                      const gchar *arg_title,
+                      const gchar *arg_default_branch)
+{
+  g_autoptr(FlatpakDir) system = dir_get_system ();
+  g_autoptr(GError) error = NULL;
+  g_autoptr(GKeyFile) config = NULL;
+  g_autofree char *group = g_strdup_printf ("remote \"%s\"", arg_remote);
+
+  g_debug ("UpdateRemote %s", arg_remote);
+
+  if (*arg_remote == 0 || strchr (arg_remote, '/') != NULL)
+    {
+      g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_INVALID_ARGS,
+                                             "Invalid remote name: %s", arg_remote);
+      return TRUE;
+    }
+
+  if (!flatpak_dir_ensure_repo (system, NULL, &error))
+    {
+      g_dbus_method_invocation_return_gerror  (invocation, error);
+      return TRUE;
+    }
+
+  config = ostree_repo_copy_config (flatpak_dir_get_repo (system));
+  if (*arg_title != 0)
+    g_key_file_set_string (config, group, "xa.title", arg_title);
+
+  if (*arg_default_branch != 0)
+    g_key_file_set_string (config, group, "xa.default-branch", arg_default_branch);
+
+  /* Update remote configuration */
+  if (!flatpak_dir_modify_remote (system, arg_remote, config,
+                                  NULL, NULL, &error))
+    {
+      g_dbus_method_invocation_return_gerror  (invocation, error);
+      return TRUE;
+    }
+
+  flatpak_system_helper_complete_update_remote (object, invocation);
+
+  return TRUE;
+}
+
+static gboolean
 flatpak_authorize_method_handler (GDBusInterfaceSkeleton *interface,
                                   GDBusMethodInvocation  *invocation,
                                   gpointer                user_data)
@@ -614,6 +661,16 @@ flatpak_authorize_method_handler (GDBusInterfaceSkeleton *interface,
 
       polkit_details_insert (details, "remote", remote);
     }
+  else if (g_strcmp0 (method_name, "UpdateRemote") == 0)
+    {
+      const char *remote;
+
+      g_variant_get_child (parameters, 0, "&s", &remote);
+
+      action = "org.freedesktop.Flatpak.update-remote";
+
+      polkit_details_insert (details, "remote", remote);
+    }
 
   if (action)
     {
@@ -666,6 +723,7 @@ on_bus_acquired (GDBusConnection *connection,
   g_signal_connect (helper, "handle-uninstall", G_CALLBACK (handle_uninstall), NULL);
   g_signal_connect (helper, "handle-install-bundle", G_CALLBACK (handle_install_bundle), NULL);
   g_signal_connect (helper, "handle-configure-remote", G_CALLBACK (handle_configure_remote), NULL);
+  g_signal_connect (helper, "handle-update-remote", G_CALLBACK (handle_update_remote), NULL);
 
   g_signal_connect (helper, "g-authorize-method",
                     G_CALLBACK (flatpak_authorize_method_handler),
