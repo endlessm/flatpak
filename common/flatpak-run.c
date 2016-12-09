@@ -2566,6 +2566,19 @@ compute_permissions (GKeyFile *app_metadata,
 
   add_default_permissions (app_context);
 
+  /* FIXME: Temporary fix for EOS 3.0.4 so that we can ship the image on split
+   * disk layouts without having to rebundle all the knowledge apps, just to
+   * fix the subscription links, that will look into /var/endless-extra. */
+  if (g_file_test ("/var/endless-extra/flatpak", G_FILE_TEST_IS_DIR)) {
+    g_autofree char *app_name = g_key_file_get_string (app_metadata, "Application", "name", NULL);
+    if (app_name != NULL)
+      {
+        g_autofree char *extra_override = g_strdup_printf ("/var/endless-extra/flatpak/app/%s:ro", app_name);
+        if (flatpak_context_verify_filesystem (extra_override, NULL))
+          flatpak_context_add_filesystem (app_context, extra_override);
+      }
+  }
+
   if (!flatpak_context_load_metadata (app_context, runtime_metadata, error))
     return NULL;
 
