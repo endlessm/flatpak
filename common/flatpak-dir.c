@@ -2353,7 +2353,7 @@ flatpak_dir_run_triggers (FlatpakDir   *self,
           g_autofree char *basedir_orig = g_file_get_path (self->basedir);
           g_autofree char *basedir = canonicalize_file_name (basedir_orig);
 
-          g_debug ("running trigger %s", name);
+          g_debug ("running trigger %s at %s", name, basedir);
 
           argv_array = g_ptr_array_new_with_free_func (g_free);
 #ifdef DISABLE_SANDBOXED_TRIGGERS
