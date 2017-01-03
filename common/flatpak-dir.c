@@ -2334,7 +2334,10 @@ flatpak_dir_run_triggers (FlatpakDir   *self,
     {
       g_autoptr(GFile) child = NULL;
       const char *name;
+      g_autofree char *stdout = NULL;
+      g_autofree char *stderr = NULL;
       GError *trigger_error = NULL;
+      gboolean res;
 
       name = g_file_info_get_name (child_info);
 
@@ -2376,13 +2379,17 @@ flatpak_dir_run_triggers (FlatpakDir   *self,
           g_ptr_array_add (argv_array, g_strdup (basedir));
           g_ptr_array_add (argv_array, NULL);
 
-          if (!g_spawn_sync ("/",
-                             (char **) argv_array->pdata,
-                             NULL,
-                             G_SPAWN_SEARCH_PATH,
-                             NULL, NULL,
-                             NULL, NULL,
-                             NULL, &trigger_error))
+          res = g_spawn_sync ("/",
+                              (char **) argv_array->pdata,
+                              NULL,
+                              G_SPAWN_SEARCH_PATH,
+                              NULL, NULL,
+                              &stdout, &stderr,
+                              NULL, &trigger_error);
+
+          g_debug ("trigger %s output\n stdout: %s\n stderr: %s\n", name, stdout, stderr);
+
+          if (!res)
             {
               g_warning ("Error running trigger %s: %s", name, trigger_error->message);
               g_clear_error (&trigger_error);
