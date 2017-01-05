@@ -4194,6 +4194,7 @@ flatpak_load_http_uri (SoupSession *soup_session,
 {
   GBytes *bytes = NULL;
   g_autoptr(SoupMessage) msg = NULL;
+  g_autoptr(GMainContext) context = NULL;
   g_autoptr(SoupRequestHTTP) request = NULL;
   g_autoptr(GMainLoop) loop = NULL;
   g_autoptr(GString) content = g_string_new ("");
@@ -4201,7 +4202,10 @@ flatpak_load_http_uri (SoupSession *soup_session,
 
   g_debug ("Loading %s using libsoup", uri);
 
-  loop = g_main_loop_new (NULL, TRUE);
+  context = g_main_context_new ();
+  g_main_context_push_thread_default (context);
+
+  loop = g_main_loop_new (context, TRUE);
   data.loop = loop;
   data.content = content;
   data.progress = progress;
@@ -4218,6 +4222,7 @@ flatpak_load_http_uri (SoupSession *soup_session,
                            load_uri_callback, &data);
 
   g_main_loop_run (loop);
+  g_main_context_pop_thread_default (context);
 
   if (data.error)
     {
@@ -4230,8 +4235,6 @@ flatpak_load_http_uri (SoupSession *soup_session,
 
   return bytes;
 }
-
-
 
 
 /* Uncomment to get debug traces in /tmp/flatpak-completion-debug.txt (nice
