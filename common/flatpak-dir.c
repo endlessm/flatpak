@@ -2365,7 +2365,12 @@ flatpak_dir_run_triggers (FlatpakDir   *self,
           g_debug ("running trigger %s at %s", name, basedir);
 
           argv_array = g_ptr_array_new_with_free_func (g_free);
-          if (!disable_sandboxed_triggers)
+          if (disable_sandboxed_triggers)
+            {
+              g_ptr_array_add (argv_array, g_file_get_path (child));
+              g_ptr_array_add (argv_array, g_strdup (basedir));
+            }
+          else
             {
               g_ptr_array_add (argv_array, g_strdup (flatpak_get_bwrap ()));
               g_ptr_array_add (argv_array, g_strdup ("--unshare-ipc"));
