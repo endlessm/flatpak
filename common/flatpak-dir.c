@@ -2316,19 +2316,10 @@ flatpak_dir_run_triggers (FlatpakDir   *self,
   g_autoptr(GFile) triggersdir = NULL;
   GError *temp_error = NULL;
   const char *triggerspath;
-  const char *disable_sandboxed_env;
-  gboolean disable_sandboxed_triggers = FALSE;
 
   triggerspath = g_getenv ("FLATPAK_TRIGGERSDIR");
   if (triggerspath == NULL)
     triggerspath = FLATPAK_TRIGGERDIR;
-
-#ifdef DISABLE_SANDBOXED_TRIGGERS
-  disable_sandboxed_triggers = TRUE;
-#endif
-  disable_sandboxed_env = g_getenv ("FLATPAK_TRIGGERS_DISABLE_SANDBOX");
-  if (disable_sandboxed_env != NULL)
-    disable_sandboxed_triggers = TRUE;
 
   g_debug ("running triggers from %s", triggerspath);
 
@@ -2365,28 +2356,25 @@ flatpak_dir_run_triggers (FlatpakDir   *self,
           g_debug ("running trigger %s at %s", name, basedir);
 
           argv_array = g_ptr_array_new_with_free_func (g_free);
-          if (disable_sandboxed_triggers)
-            {
-              g_ptr_array_add (argv_array, g_file_get_path (child));
-              g_ptr_array_add (argv_array, g_strdup (basedir));
-            }
-          else
-            {
-              g_ptr_array_add (argv_array, g_strdup (flatpak_get_bwrap ()));
-              g_ptr_array_add (argv_array, g_strdup ("--unshare-ipc"));
-              g_ptr_array_add (argv_array, g_strdup ("--unshare-net"));
-              g_ptr_array_add (argv_array, g_strdup ("--unshare-pid"));
-              g_ptr_array_add (argv_array, g_strdup ("--ro-bind"));
-              g_ptr_array_add (argv_array, g_strdup ("/"));
-              g_ptr_array_add (argv_array, g_strdup ("/"));
-              g_ptr_array_add (argv_array, g_strdup ("--proc"));
-              g_ptr_array_add (argv_array, g_strdup ("/proc"));
-              g_ptr_array_add (argv_array, g_strdup ("--dev"));
-              g_ptr_array_add (argv_array, g_strdup ("/dev"));
-              g_ptr_array_add (argv_array, g_strdup ("--bind"));
-              g_ptr_array_add (argv_array, g_strdup (basedir));
-              g_ptr_array_add (argv_array, g_strdup (basedir));
-            }
+#ifdef DISABLE_SANDBOXED_TRIGGERS
+          g_ptr_array_add (argv_array, g_file_get_path (child));
+          g_ptr_array_add (argv_array, g_strdup (basedir));
+#else
+          g_ptr_array_add (argv_array, g_strdup (flatpak_get_bwrap ()));
+          g_ptr_array_add (argv_array, g_strdup ("--unshare-ipc"));
+          g_ptr_array_add (argv_array, g_strdup ("--unshare-net"));
+          g_ptr_array_add (argv_array, g_strdup ("--unshare-pid"));
+          g_ptr_array_add (argv_array, g_strdup ("--ro-bind"));
+          g_ptr_array_add (argv_array, g_strdup ("/"));
+          g_ptr_array_add (argv_array, g_strdup ("/"));
+          g_ptr_array_add (argv_array, g_strdup ("--proc"));
+          g_ptr_array_add (argv_array, g_strdup ("/proc"));
+          g_ptr_array_add (argv_array, g_strdup ("--dev"));
+          g_ptr_array_add (argv_array, g_strdup ("/dev"));
+          g_ptr_array_add (argv_array, g_strdup ("--bind"));
+          g_ptr_array_add (argv_array, g_strdup (basedir));
+          g_ptr_array_add (argv_array, g_strdup (basedir));
+#endif
           g_ptr_array_add (argv_array, g_file_get_path (child));
           g_ptr_array_add (argv_array, g_strdup (basedir));
           g_ptr_array_add (argv_array, NULL);
