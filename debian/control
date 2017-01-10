@@ -86,6 +86,7 @@ Package: flatpak-builder
 Architecture: linux-any
 Section: devel
 Depends:
+ appstream-util,
  flatpak (= ${binary:Version}),
  ${misc:Depends},
  ${shlibs:Depends},
