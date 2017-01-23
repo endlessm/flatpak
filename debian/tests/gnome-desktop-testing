@@ -19,10 +19,8 @@ gnome-desktop-testing-runner -l Flatpak | while read t; do
 			# has more dependencies
 			continue
 			;;
-
-		(Flatpak/test-extensions.sh.test)
-			# fails to clean up on ci.debian.net and I can't
-			# reproduce it under LXC locally
+		(Flatpak/test-builder-python.sh.test)
+			# has more dependencies
 			continue
 			;;
 	esac

@@ -7,7 +7,7 @@ Uploaders:
  Simon McVittie <smcv@debian.org>,
 Build-Depends:
  attr,
- bubblewrap (>= 0.1.2),
+ bubblewrap (>= 0.1.5),
  ca-certificates,
  dbus,
  debhelper (>= 10~),
@@ -31,7 +31,7 @@ Build-Depends:
  libgirepository1.0-dev,
  libglib2.0-dev,
  libjson-glib-dev,
- libostree-dev (>= 2016.12),
+ libostree-dev (>= 2016.15),
  libpolkit-gobject-1-dev,
  libseccomp-dev,
  libsoup2.4-dev,
@@ -50,7 +50,7 @@ Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/flatpak.git
 Package: flatpak
 Architecture: linux-any
 Depends:
- bubblewrap (>= 0.1.2),
+ bubblewrap (>= 0.1.5),
  fuse,
  ${misc:Depends},
  ${shlibs:Depends},
@@ -145,7 +145,7 @@ Depends:
  gir1.2-flatpak-1.0 (= ${binary:Version}),
  libflatpak0 (= ${binary:Version}),
  libglib2.0-dev,
- libostree-dev (>= 2016.6),
+ libostree-dev (>= 2016.15),
  pkg-config,
  ${misc:Depends},
 Description: Application deployment framework for desktop apps (development)
@@ -173,7 +173,7 @@ Package: libflatpak0
 Architecture: linux-any
 Section: libs
 Depends:
- bubblewrap (>= 0.1.2),
+ bubblewrap (>= 0.1.5),
  ${misc:Depends},
  ${shlibs:Depends},
 Pre-Depends:

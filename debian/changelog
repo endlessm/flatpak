@@ -1,3 +1,86 @@
+flatpak (0.8.1-1) unstable; urgency=medium
+
+  * New upstream release, very similar to 0.8.0-2
+    - drop all patches
+  * d/p/flatpak-system-helper-remove-dangling-reference-to-EXTERN.patch:
+    do not search /export/share, which seems to have been unintended
+
+ -- Simon McVittie <smcv@debian.org>  Thu, 19 Jan 2017 14:55:24 +0000
+
+flatpak (0.8.0-2) unstable; urgency=medium
+
+  * d/p/Use-seccomp-to-filter-out-TIOCSTI-ioctl.patch:
+    Add patch from upstream to prevent contained apps from using
+    TIOCSTI ioctl. This would let the app inject commands into the
+    terminal from which it was invoked (CVE-2017-5226). This was
+    initially fixed in bubblewrap by calling setsid(), but that
+    breaks the ability to use Ctrl+Z or Ctrl+C on a flatpak-confined
+    process, so it is being made optional; prevent the attack here
+    instead, in a way that doesn't break shells.
+  * d/p/Fix-update-of-standalone-bundle.patch:
+    Add patch from upstream to fix updating an existing app with
+    "flatpak install --bundle foo.flatpak"
+  * d/p/Make-sure-var-tmp-is-not-on-tmpfs.patch:
+    Add patch from upstream to mount ~/.var/APP/cache/tmp at /var/tmp
+    inside the sandbox, so apps can rely on /var/tmp being on disk
+  * d/p/Document-the-DefaultBranch-key.patch,
+    d/p/Document-RuntimeRepo-key.patch:
+    Add patches from upstream to fill in some missing documentation
+  * d/p/testlibrary-ensure-that-contents_array-is-NULL-terminated.patch,
+    d/p/tests-Install-testpython.py-executable.patch,
+    d/p/tests-Move-the-test-repo-to-a-subdirectory-repos-test.patch:
+    Fix some bugs in the tests
+  * debian/tests/: split out builder-python into a separate autopkgtest,
+    it too has more dependencies
+
+ -- Simon McVittie <smcv@debian.org>  Wed, 18 Jan 2017 00:02:19 +0000
+
+flatpak (0.8.0-1) unstable; urgency=medium
+
+  * New upstream stable release
+    - Bump bubblewrap dependencies to 0.1.5 following configure.ac
+    - Bump ostree dependency to 2016.15 following upstream release notes
+      (the minimal dependency is 2016.14, but 2016.15 is recommended)
+    - debian/libflatpak0.symbols: add new ABIs
+    - d/p/pull-Exit-early-on-error-without-aborting-transaction.patch:
+      drop patch, applied upstream
+  * debian/gbp.conf: switch upstream branch to debian/0.8.x to follow
+    the first upstream stable-branch
+  * debian/watch: only follow stable-branches
+  * debian/org.freedesktop.Flatpak.pkla: configure polkit 0.105 to
+    allow sudoers to uninstall apps and runtimes without re-authenticating,
+    following upstream changes to the org.freedesktop.Flatpak.rules used in
+    newer polkit versions
+  * d/p/Update-Polish-translation.patch: update translated strings from
+    upstream git
+  * d/p/flatpak-builder-1-fix-typo.patch: fix a typo in the man page
+
+ -- Simon McVittie <smcv@debian.org>  Wed, 21 Dec 2016 14:13:52 +0000
+
+flatpak (0.6.14-3) unstable; urgency=medium
+
+  * d/tests/*: only run tests on a real or virtual machine, not in a
+    container. bubblewrap is effectively already a container, and
+    nesting containers doesn't work particularly well.
+    Unfortunately this means the tests won't work on ci.debian.net,
+    which uses LXC.
+
+ -- Simon McVittie <smcv@debian.org>  Thu, 01 Dec 2016 12:42:45 +0000
+
+flatpak (0.6.14-2) unstable; urgency=medium
+
+  * d/p/pull-Exit-early-on-error-without-aborting-transaction.patch:
+    Add patch recommended by upstream to fix a GNOME Software crash
+
+ -- Simon McVittie <smcv@debian.org>  Tue, 29 Nov 2016 17:53:34 +0000
+
+flatpak (0.6.14-1) unstable; urgency=medium
+
+  * New upstream release
+    - update ostree build-dependency to 2016.14
+
+ -- Simon McVittie <smcv@debian.org>  Tue, 29 Nov 2016 12:51:43 +0000
+
 flatpak (0.6.13-1) unstable; urgency=medium
 
   * New upstream release
