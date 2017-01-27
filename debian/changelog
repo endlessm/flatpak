@@ -1,3 +1,13 @@
+flatpak (0.8.2~endless1) eos; urgency=medium
+
+  * Endless-specific release to integrate this security update as soon
+    as possible for early testing with a merge to EOS 3.1.2 in mind,
+    without waiting for Debian to package the 0.8.2 release.
+  * Added the ~endless1 to the version string so that dpkg --compare-version
+    picks debian's 0.8.2 as a more recent than this one, once released.
+
+ -- Mario Sanchez Prada <mario@endlessm.com>  Fri, 27 Jan 2017 13:29:32 +0000
+
 flatpak (0.8.1-1) unstable; urgency=medium
 
   * New upstream release, very similar to 0.8.0-2
