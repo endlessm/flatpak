@@ -3856,7 +3856,6 @@ flatpak_run_setup_base_argv (GPtrArray      *argv_array,
 
   add_args (argv_array,
             "--unshare-pid",
-            "--unshare-user-try",
             "--proc", "/proc",
             "--dir", "/tmp",
             "--dir", "/var/tmp",
