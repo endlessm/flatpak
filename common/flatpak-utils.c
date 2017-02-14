@@ -4441,6 +4441,7 @@ typedef struct {
   GString *content;
   char buffer[16*1024];
   FlatpakLoadUriProgress progress;
+  GCancellable *cancellable;
   gpointer user_data;
   guint64 last_progress_time;
 } LoadUriData;
@@ -4506,7 +4507,7 @@ load_uri_read_cb (GObject *source, GAsyncResult *res, gpointer user_data)
     }
 
   g_input_stream_read_async (stream, data->buffer, sizeof (data->buffer),
-                             G_PRIORITY_DEFAULT, NULL,
+                             G_PRIORITY_DEFAULT, data->cancellable,
                              load_uri_read_cb, data);
 }
 
@@ -4550,7 +4551,7 @@ load_uri_callback (GObject *source_object,
     }
 
   g_input_stream_read_async (in, data->buffer, sizeof (data->buffer),
-                             G_PRIORITY_DEFAULT, NULL,
+                             G_PRIORITY_DEFAULT, data->cancellable,
                              load_uri_read_cb, data);
 }
 
@@ -4604,6 +4605,7 @@ flatpak_load_http_uri (SoupSession *soup_session,
   data.loop = loop;
   data.content = content;
   data.progress = progress;
+  data.cancellable = cancellable;
   data.user_data = user_data;
   data.last_progress_time = g_get_monotonic_time ();
 
@@ -4654,6 +4656,7 @@ flatpak_download_http_uri (SoupSession *soup_session,
   data.loop = loop;
   data.out = out;
   data.progress = progress;
+  data.cancellable = cancellable;
   data.user_data = user_data;
   data.last_progress_time = g_get_monotonic_time ();
 
