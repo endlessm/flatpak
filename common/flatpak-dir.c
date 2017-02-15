@@ -7269,19 +7269,18 @@ flatpak_dir_update_remote_configuration (FlatpakDir   *self,
         g_assert (system_helper != NULL);
 
         g_debug ("Calling system helper: UpdateRemote");
-        if (!flatpak_system_helper_call_update_remote_sync (system_helper,
-                                                            remote,
-                                                            title != NULL ? title : "",
-                                                            default_branch ? default_branch : "",
-                                                            installation ? installation : "",
-                                                            cancellable, error))
-
-          return TRUE;
+        return flatpak_system_helper_call_update_remote_sync (system_helper,
+                                                              remote,
+                                                              title != NULL ? title : "",
+                                                              default_branch ? default_branch : "",
+                                                              installation ? installation : "",
+                                                              cancellable, error);
       }
-
-    /* Update the local remote configuration with the updated info. */
-    if (!flatpak_dir_modify_remote (self, remote, config, NULL, cancellable, error))
-      return FALSE;
+    else
+      {
+        /* Update the local remote configuration with the updated info. */
+        return flatpak_dir_modify_remote (self, remote, config, NULL, cancellable, error);
+      }
   }
 
   return TRUE;
