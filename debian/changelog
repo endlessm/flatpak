@@ -1,3 +1,25 @@
+flatpak (0.8.3-1) unstable; urgency=medium
+
+  * New upstream bugfix release
+    - fixes portals' ability to identify confined apps
+      (Closes: #855129)
+    - better support for third-party (proprietary) OpenGL drivers
+    - better handling of errors for extra-data
+    - handle extra-data properly for runtimes (as well as apps)
+    - respect required version for runtimes (as well as apps)
+    - flatpak list: Don't break if some local ref is not deployed
+    - builder: Look for appstream data in /app/share/metadata also
+    - builder: Fix buildsystem=cmake builds
+    - Add progress reporting to extra-data download
+    - Fix uid/gid for directories in document portal
+  * Duplicate the profile.d snippet in /etc/X11/Xsession.d so it
+    applies to X11 sessions, not just login shells. This matches the
+    upstream intention: X11 sessions have traditionally run in a login
+    shell on Red Hat derivatives, but not in Debian derivatives.
+    (Closes: #846338)
+
+ -- Simon McVittie <smcv@debian.org>  Tue, 14 Feb 2017 14:14:45 +0000
+
 flatpak (0.8.2-1) unstable; urgency=medium
 
   * New upstream bugfix release
