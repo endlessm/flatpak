@@ -1,3 +1,53 @@
+flatpak (0.8.4-3) unstable; urgency=medium
+
+  * Mark the one remaining patch as applied in 0.9.1
+  * Upload to unstable
+
+ -- Simon McVittie <smcv@debian.org>  Wed, 15 Mar 2017 18:43:51 +0000
+
+flatpak (0.8.4-2) experimental; urgency=medium
+
+  * Explicitly build-depend on automake. Otherwise, the aspcud resolver
+    used in experimental sometimes chooses automake1.11 as the best
+    solution to dh-autoreconf's dependency on automake | automaken,
+    causing FTBFS.
+    - Set the dependency to 1.14.1 since flatpak is known to build
+      successfully with that version in jessie-backports, whereas older
+      versions are not known to work.
+
+ -- Simon McVittie <smcv@debian.org>  Sun, 12 Mar 2017 13:59:18 +0000
+
+flatpak (0.8.4-1) experimental; urgency=medium
+
+  * New upstream bugfix release
+    - Don't add flatpak directories to XDG_DATA_DIRS if already present
+    - Do add flatpak directories to XDG_DATA_DIRS if it already has
+      a non-default value
+    - Improve progress estimates and reporting for UI frontends
+    - Fill in many missing options in man pages
+    - Support extensions that apply to multiple versions, particularly
+      useful for OpenGL drivers
+    - Support extensions that do not depend on any specific runtime,
+      particularly useful for proprietary OpenGL drivers packaged with
+      a static binary helper
+    - Various fixes for error checking and crashes
+    - Make flatpak_get_system_installations() return an array that owns
+      (takes responsibility for freeing) its contents. This is
+      technically an ABI break, but it makes this function consistent
+      with others that have a similar signature, and nothing in Debian
+      uses it yet.
+    - Disable spliced reads in the FUSE file system, which don't appear
+      to work
+    - Make FamilyWild xauth tokens available in the sandbox, not
+      just FamilyLocal
+    - Fix a misleading message on systems without systemd --user:
+      it now disables an optional feature without breaking sandboxing
+  * Add patch simplifying profile.d snippet
+  * Initially upload to experimental since this is relatively large
+    for a stable-branch release
+
+ -- Simon McVittie <smcv@debian.org>  Sat, 11 Mar 2017 13:00:05 +0000
+
 flatpak (0.8.3-1) unstable; urgency=medium
 
   * New upstream bugfix release
