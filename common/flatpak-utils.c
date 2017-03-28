@@ -735,7 +735,8 @@ flatpak_get_allowed_exports (const char     *source_path,
        * and we can *only* match exactly these */
       require_exact_match = TRUE;
     }
-  else if (strcmp (source_path, "share/gnome-shell/search-providers") == 0)
+  else if (strcmp (source_path, "share/gnome-shell/search-providers") == 0 ||
+           strcmp (source_path, "share/eos-discovery-feed/content-providers") == 0)
     {
       g_ptr_array_add (allowed_extensions, g_strdup (".ini"));
     }
