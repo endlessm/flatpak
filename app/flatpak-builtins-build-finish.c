@@ -236,6 +236,7 @@ collect_exports (GFile          *base,
     "share/dbus-1/services",              /* D-Bus service files */
     "share/gnome-shell/search-providers", /* Search providers */
     "share/eos-shell-content/splash",     /* Endless splash screens */
+    "share/eos-discovery-feed/content-providers", /* Endless DF content providers */
     NULL,
   };
 
