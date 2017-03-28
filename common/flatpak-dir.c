@@ -7223,6 +7223,7 @@ flatpak_export_dir (GFile        *source,
     "share/mime/packages",                 "../../..",
     "bin",                                 "..",
     "share/eos-shell-content/splash",      "../../..",
+    "share/eos-discovery-feed/content-providers", "../../..",
   };
   int i;
 
