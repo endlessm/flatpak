@@ -300,6 +300,10 @@ collect_exports (GFile          *base,
   g_ptr_array_add (exported_directory_infos,
                    builtin_exported_directory_info_new_simple ("share/eos-shell-content/splash", app_id));
 
+  /* Copy Endless DF content providers */
+  g_ptr_array_add (exported_directory_infos,
+                   builtin_exported_directory_info_new_simple ("share/eos-discovery-feed/content-providers", app_id));
+
   files = g_file_get_child (base, "files");
 
   export = g_file_get_child (base, "export");
