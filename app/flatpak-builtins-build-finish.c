@@ -196,7 +196,7 @@ collect_exports (GFile *base, const char *app_id, gboolean is_runtime, GCancella
     "share/dbus-1/services",              /* D-Bus service files */
     "share/gnome-shell/search-providers", /* Search providers */
     "share/eos-shell-content/splash",     /* Endless splash screens */
-    "share/com.endlessm.GrandCentral/content-providers" /* Endless GC content providers */
+    "share/eos-discovery-feed/content-providers" /* Endless DF content providers */
     NULL,
   };
   const char *runtime_paths[] = {
