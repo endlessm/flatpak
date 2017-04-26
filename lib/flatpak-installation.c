@@ -1121,25 +1121,6 @@ get_write_progress (guint outstanding_writes)
   return (guint) (3 / (gdouble) outstanding_writes);
 }
 
-static gboolean
-app_contains_extra_data (const char *app_id)
-{
-  /* HACK: This is a temporary solution until the detached metadata work is ready */
-  const char *extra_data_apps[] =
-    {
-      "com.dropbox.Client",
-      "com.google.Chrome",
-      "com.microsoft.Skype",
-      "org.mozilla.Firefox",
-      "com.slack.Slack",
-      "com.spotify.Client",
-      "org.videolan.VLC",
-      NULL
-    };
-
-  return app_id ? g_strv_contains (extra_data_apps, app_id) : FALSE;
-}
-
 static void
 progress_cb (OstreeAsyncProgress *progress, gpointer user_data)
 {
@@ -1164,8 +1145,6 @@ progress_cb (OstreeAsyncProgress *progress, gpointer user_data)
   guint64 current_time;
   guint new_progress = 0;
   gboolean estimating = FALSE;
-  gboolean has_extra_data;
-  const char *app_id;
 
   /* The heuristic here goes as follows:
    *  - If we have delta files, grow up to 45%
@@ -1197,15 +1176,12 @@ progress_cb (OstreeAsyncProgress *progress, gpointer user_data)
   requested = ostree_async_progress_get_uint (progress, "requested");
   current_time = g_get_monotonic_time ();
 
-  app_id = g_object_get_data (G_OBJECT (progress), "app_id");
-  has_extra_data = app_contains_extra_data (app_id);
-
   if (status)
     {
       g_string_append (buf, status);
 
       /* The status is sent on error or when the pull is finished */
-      new_progress = has_extra_data ? 55 : 100;
+      new_progress = outstanding_extra_data ? 55 : 100;
     }
   else if (outstanding_fetches)
     {
@@ -1232,7 +1208,7 @@ progress_cb (OstreeAsyncProgress *progress, gpointer user_data)
 
 
           /* When we have delta files, no metadata is fetched */
-          if (has_extra_data)
+          if (outstanding_extra_data > 0)
             new_progress = (52 * bytes_transferred) / total_delta_part_size;
           else
             new_progress = (97 * bytes_transferred) / total_delta_part_size;
@@ -1258,7 +1234,7 @@ progress_cb (OstreeAsyncProgress *progress, gpointer user_data)
                                   fetched, requested, formatted_bytes_sec, formatted_bytes_transferred);
 
 
-          if (has_extra_data)
+          if (outstanding_extra_data)
             new_progress = 10 + (42 * (double) fetched) / requested;
           else
             new_progress = 10 + (87 * (double) fetched) / requested;
@@ -1290,7 +1266,7 @@ progress_cb (OstreeAsyncProgress *progress, gpointer user_data)
       g_string_append_printf (buf, "Writing objects: %u", outstanding_writes);
 
       /* Writing the objects advances 3% of progress */
-      new_progress = has_extra_data ? 52 : 97;
+      new_progress = outstanding_extra_data ? 52 : 97;
       new_progress += get_write_progress (outstanding_writes);
     }
   else
@@ -1465,7 +1441,6 @@ flatpak_installation_install_full (FlatpakInstallation    *self,
       ostree_progress = ostree_async_progress_new_and_connect (progress_cb, progress_data);
       g_object_set_data (G_OBJECT (ostree_progress), "callback", progress);
       g_object_set_data (G_OBJECT (ostree_progress), "last_progress", GUINT_TO_POINTER (0));
-      g_object_set_data_full (G_OBJECT (ostree_progress), "app_id", g_strdup (name), g_free);
     }
 
   if (!flatpak_dir_install (dir_clone, FALSE, FALSE, ref, remote_name, (const char **)subpaths,
@@ -1592,7 +1567,6 @@ flatpak_installation_update_full (FlatpakInstallation    *self,
       ostree_progress = ostree_async_progress_new_and_connect (progress_cb, progress_data);
       g_object_set_data (G_OBJECT (ostree_progress), "callback", progress);
       g_object_set_data (G_OBJECT (ostree_progress), "last_progress", GUINT_TO_POINTER (0));
-      g_object_set_data_full (G_OBJECT (ostree_progress), "app_id", g_strdup (name), g_free);
     }
 
   if (!flatpak_dir_update (dir_clone,
