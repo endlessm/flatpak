@@ -1806,6 +1806,8 @@ extra_data_progress_report (guint64 downloaded_bytes,
 static gboolean
 flatpak_dir_setup_extra_data (FlatpakDir           *self,
                               OstreeRepo           *repo,
+                              const char           *repository,
+                              const char           *ref,
                               const char           *rev,
                               FlatpakPullFlags      flatpak_flags,
                               OstreeAsyncProgress  *progress,
@@ -1819,7 +1821,24 @@ flatpak_dir_setup_extra_data (FlatpakDir           *self,
 
   extra_data_sources = flatpak_repo_get_extra_data_sources (repo, rev, cancellable, NULL);
   if (extra_data_sources == NULL)
-    return TRUE;
+    {
+      /* Pull the commits (and only the commits) to check for extra data
+       * again. Here we don't pass the progress because we don't want any
+       * reports coming out of it. */
+      if (!repo_pull_one_dir (repo, repository,
+                              NULL,
+                              ref,
+                              rev,
+                              OSTREE_REPO_PULL_FLAGS_COMMIT_ONLY,
+                              NULL,
+                              cancellable,
+                              error))
+        return FALSE;
+
+      extra_data_sources = flatpak_repo_get_extra_data_sources (repo, rev, cancellable, NULL);
+      if (extra_data_sources == NULL)
+        return TRUE;
+    }
 
   n_extra_data = g_variant_n_children (extra_data_sources);
   if (n_extra_data == 0)
@@ -1849,9 +1868,17 @@ flatpak_dir_setup_extra_data (FlatpakDir           *self,
       ostree_async_progress_set_uint (progress, "total-extra-data", n_extra_data);
       ostree_async_progress_set_uint64 (progress, "total-extra-data-bytes", total_download_size);
       ostree_async_progress_set_uint64 (progress, "transferred-extra-data-bytes", 0);
+      ostree_async_progress_set_uint (progress, "downloading-extra-data", 0);
     }
 
   return TRUE;
+}
+
+static inline void
+reset_async_progress_extra_data (OstreeAsyncProgress *progress)
+{
+  if (progress)
+    ostree_async_progress_set_uint (progress, "downloading-extra-data", 0);
 }
 
 static gboolean
@@ -1890,7 +1917,10 @@ flatpak_dir_pull_extra_data (FlatpakDir          *self,
 
   /* Other fields were already set in flatpak_dir_setup_extra_data() */
   if (progress)
-    ostree_async_progress_set_uint64 (progress, "start-time-extra-data", g_get_monotonic_time ());
+    {
+      ostree_async_progress_set_uint64 (progress, "start-time-extra-data", g_get_monotonic_time ());
+      ostree_async_progress_set_uint (progress, "downloading-extra-data", 1);
+    }
 
   extra_data_progress.progress = progress;
 
@@ -1923,7 +1953,10 @@ flatpak_dir_pull_extra_data (FlatpakDir          *self,
       /* Don't allow file uris here as that could read local files based on remote data */
       if (!g_str_has_prefix (extra_data_uri, "http:") &&
           !g_str_has_prefix (extra_data_uri, "https:"))
-        return flatpak_fail (error, _("Unsupported extra data uri %s"), extra_data_uri);
+        {
+          reset_async_progress_extra_data (progress);
+          return flatpak_fail (error, _("Unsupported extra data uri %s"), extra_data_uri);
+        }
 
       /* TODO: Download to disk to support resumed downloads on error */
 
@@ -1933,12 +1966,16 @@ flatpak_dir_pull_extra_data (FlatpakDir          *self,
                                      cancellable, error);
       if (bytes == NULL)
         {
+          reset_async_progress_extra_data (progress);
           g_prefix_error (error, _("While downloading %s: "), extra_data_uri);
           return FALSE;
         }
 
       if (g_bytes_get_size (bytes) != download_size)
-        return flatpak_fail (error, _("Wrong size for extra data %s"), extra_data_uri);
+        {
+          reset_async_progress_extra_data (progress);
+          return flatpak_fail (error, _("Wrong size for extra data %s"), extra_data_uri);
+        }
 
       extra_data_progress.previous_dl += download_size;
       if (progress)
@@ -1946,7 +1983,10 @@ flatpak_dir_pull_extra_data (FlatpakDir          *self,
 
       sha256 = g_compute_checksum_for_bytes (G_CHECKSUM_SHA256, bytes);
       if (strcmp (sha256, extra_data_sha256) != 0)
-        return flatpak_fail (error, _("Invalid checksum for extra data %s"), extra_data_uri);
+        {
+          reset_async_progress_extra_data (progress);
+          return flatpak_fail (error, _("Invalid checksum for extra data %s"), extra_data_uri);
+        }
 
       g_variant_builder_add (extra_data_builder,
                              "(^ay@ay)",
@@ -1955,6 +1995,8 @@ flatpak_dir_pull_extra_data (FlatpakDir          *self,
     }
 
   extra_data = g_variant_ref_sink (g_variant_builder_end (extra_data_builder));
+
+  reset_async_progress_extra_data (progress);
 
   if (!ostree_repo_read_commit_detached_metadata (repo, rev, &detached_metadata,
                                                   cancellable, error))
@@ -2142,15 +2184,6 @@ flatpak_dir_pull (FlatpakDir          *self,
   /* Past this we must use goto out, so we clean up console and
      abort the transaction on error */
 
-  /* Setup extra data information before starting to pull, so we can have precise
-   * progress reports */
-  if (!flatpak_dir_setup_extra_data (self, repo, rev,
-                                     flatpak_flags,
-                                     progress,
-                                     cancellable,
-                                     error))
-    goto out;
-
   if (subpaths != NULL && subpaths[0] != NULL)
     {
       subdirs_arg = g_ptr_array_new_with_free_func (g_free);
@@ -2164,6 +2197,17 @@ flatpak_dir_pull (FlatpakDir          *self,
 
   if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
     goto out;
+
+  /* Setup extra data information before starting to pull, so we can have precise
+   * progress reports */
+  if (!flatpak_dir_setup_extra_data (self, repo, repository,
+                                     ref, rev,
+                                     flatpak_flags,
+                                     progress,
+                                     cancellable,
+                                     error))
+    goto out;
+
 
   if (!repo_pull_one_dir (repo, repository,
                           subdirs_arg ? (const char **)subdirs_arg->pdata : NULL,
