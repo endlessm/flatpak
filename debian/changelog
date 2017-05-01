@@ -1,3 +1,20 @@
+flatpak (0.8.4-3xenial1) xenial; urgency=medium
+
+  [ Dan Nicholson ]
+  * Backport to xenial (T10694)
+    - Drop debhelper compat back to 9 since 10 is not in xenial.
+      + debian/compat: Drop back to debhelper 9.
+      + debian/control: Add back dh-autoreconf and dh-systemd deps.
+      + debian/rules: Add back --with autoreconf and systemd.
+
+  [ Simon McVittie ]
+  * d/p/debian/Try-gtk-3.0-version-of-the-icon-cache-utility-first.patch:
+    bring back compatibility with gtk-update-icon-cache-3.0, for backports
+  * (Build-)depend on libgtk-3-bin, not gtk-update-icon-cache,
+    for the jessie backport
+
+ -- Dan Nicholson <nicholson@endlessm.com>  Mon, 01 May 2017 09:18:34 -0500
+
 flatpak (0.8.4-3) unstable; urgency=medium
 
   * Mark the one remaining patch as applied in 0.9.1
