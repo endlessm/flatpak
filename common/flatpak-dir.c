@@ -1721,13 +1721,14 @@ repo_pull_one_dir (OstreeRepo          *self,
                    const char         **dirs_to_pull,
                    const char          *ref_to_fetch,
                    const char          *rev_to_fetch,
+                   FlatpakPullFlags     flatpak_flags,
                    OstreeRepoPullFlags  flags,
                    OstreeAsyncProgress *progress,
                    GCancellable        *cancellable,
                    GError             **error)
 {
   GVariantBuilder builder;
-  gboolean force_disable_deltas = FALSE;
+  gboolean force_disable_deltas = (flatpak_flags & FLATPAK_PULL_FLAGS_NO_STATIC_DELTAS) != 0;
   g_autoptr(GVariant) options = NULL;
   const char *refs_to_fetch[2];
   const char *revs_to_fetch[2];
@@ -1828,6 +1829,7 @@ flatpak_dir_setup_extra_data (FlatpakDir           *self,
                               NULL,
                               ref,
                               rev,
+                              flatpak_flags,
                               OSTREE_REPO_PULL_FLAGS_COMMIT_ONLY,
                               NULL,
                               cancellable,
@@ -2210,7 +2212,7 @@ flatpak_dir_pull (FlatpakDir          *self,
 
   if (!repo_pull_one_dir (repo, repository,
                           subdirs_arg ? (const char **)subdirs_arg->pdata : NULL,
-                          ref, rev, flags,
+                          ref, rev, flatpak_flags, flags,
                           progress,
                           cancellable, error))
     {
@@ -4314,6 +4316,7 @@ gboolean
 flatpak_dir_install (FlatpakDir          *self,
                      gboolean             no_pull,
                      gboolean             no_deploy,
+                     gboolean             no_static_deltas,
                      const char          *ref,
                      const char          *remote_name,
                      const char         **opt_subpaths,
@@ -4382,14 +4385,19 @@ flatpak_dir_install (FlatpakDir          *self,
           /* We're pulling from a remote source, we do the network mirroring pull as a
              user and hand back the resulting data to the system-helper, that trusts us
              due to the GPG signatures in the repo */
+          FlatpakPullFlags flatpak_flags;
 
           child_repo = flatpak_dir_create_system_child_repo (self, &child_repo_lock, error);
           if (child_repo == NULL)
             return FALSE;
 
+          flatpak_flags = FLATPAK_PULL_FLAGS_DOWNLOAD_EXTRA_DATA | FLATPAK_PULL_FLAGS_SIDELOAD_EXTRA_DATA;
+          if (no_static_deltas)
+            flatpak_flags |= FLATPAK_PULL_FLAGS_NO_STATIC_DELTAS;
+
           if (!flatpak_dir_pull (self, remote_name, ref, NULL, subpaths,
                                  child_repo,
-                                 FLATPAK_PULL_FLAGS_DOWNLOAD_EXTRA_DATA | FLATPAK_PULL_FLAGS_SIDELOAD_EXTRA_DATA,
+                                 flatpak_flags,
                                  OSTREE_REPO_PULL_FLAGS_MIRROR,
                                  progress, cancellable, error))
             return FALSE;
@@ -4684,6 +4692,7 @@ gboolean
 flatpak_dir_update (FlatpakDir          *self,
                     gboolean             no_pull,
                     gboolean             no_deploy,
+                    gboolean             no_static_deltas,
                     const char          *ref,
                     const char          *remote_name,
                     const char          *checksum_or_latest,
@@ -4828,14 +4837,19 @@ flatpak_dir_update (FlatpakDir          *self,
           /* We're pulling from a remote source, we do the network mirroring pull as a
              user and hand back the resulting data to the system-helper, that trusts us
              due to the GPG signatures in the repo */
+          FlatpakPullFlags flatpak_flags;
 
           child_repo = flatpak_dir_create_system_child_repo (self, &child_repo_lock, error);
           if (child_repo == NULL)
             return FALSE;
 
+          flatpak_flags = FLATPAK_PULL_FLAGS_DOWNLOAD_EXTRA_DATA | FLATPAK_PULL_FLAGS_SIDELOAD_EXTRA_DATA;
+          if (no_static_deltas)
+            flatpak_flags |= FLATPAK_PULL_FLAGS_NO_STATIC_DELTAS;
+
           if (!flatpak_dir_pull (self, remote_name, ref, rev, subpaths,
                                  child_repo,
-                                 FLATPAK_PULL_FLAGS_DOWNLOAD_EXTRA_DATA | FLATPAK_PULL_FLAGS_SIDELOAD_EXTRA_DATA,
+                                 flatpak_flags,
                                  OSTREE_REPO_PULL_FLAGS_MIRROR,
                                  progress, cancellable, error))
             return FALSE;
@@ -4893,6 +4907,7 @@ gboolean
 flatpak_dir_install_or_update (FlatpakDir          *self,
                                gboolean             no_pull,
                                gboolean             no_deploy,
+                               gboolean             no_static_deltas,
                                const char          *ref,
                                const char          *remote_name,
                                const char         **opt_subpaths,
@@ -4907,6 +4922,7 @@ flatpak_dir_install_or_update (FlatpakDir          *self,
     return flatpak_dir_update (self,
                                no_pull,
                                no_deploy,
+                               no_static_deltas,
                                ref,
                                remote_name,
                                NULL,
@@ -4918,6 +4934,7 @@ flatpak_dir_install_or_update (FlatpakDir          *self,
     return flatpak_dir_install (self,
                                 no_pull,
                                 no_deploy,
+                                no_static_deltas,
                                 ref,
                                 remote_name,
                                 opt_subpaths,
