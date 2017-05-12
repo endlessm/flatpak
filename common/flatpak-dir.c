@@ -1763,6 +1763,9 @@ repo_pull_one_dir (OstreeRepo          *self,
   g_variant_builder_add (&builder, "{s@v}", "override-commit-ids",
                          g_variant_new_variant (g_variant_new_strv ((const char * const *) revs_to_fetch, -1)));
 
+  g_variant_builder_add (&builder, "{s@v}", "update-frequency",
+                         g_variant_new_variant (g_variant_new_uint32 (FLATPAK_DEFAULT_UPDATE_FREQUENCY)));
+
   options = g_variant_ref_sink (g_variant_builder_end (&builder));
   res = ostree_repo_pull_with_options (self, remote_name, options,
                                        progress, cancellable, error);
@@ -2292,6 +2295,8 @@ repo_pull_one_untrusted (OstreeRepo          *self,
                          g_variant_new_variant (g_variant_new_boolean (TRUE)));
   g_variant_builder_add (&builder, "{s@v}", "inherit-transaction",
                          g_variant_new_variant (g_variant_new_boolean (TRUE)));
+  g_variant_builder_add (&builder, "{s@v}", "update-frequency",
+                         g_variant_new_variant (g_variant_new_uint32 (FLATPAK_DEFAULT_UPDATE_FREQUENCY)));
 
   if (dirs_to_pull)
     {
