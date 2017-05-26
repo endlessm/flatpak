@@ -2742,6 +2742,7 @@ flatpak_dir_pull (FlatpakDir          *self,
   g_autoptr(GPtrArray) subdirs_arg = NULL;
   g_auto(OstreeRepoFinderResultv) allocated_results = NULL;
   const OstreeRepoFinderResult * const *results;
+  g_autoptr(GError) my_error = NULL;
 
   /* If @opt_results is set, @opt_rev must be. */
   g_return_val_if_fail (opt_results == NULL || opt_rev != NULL, FALSE);
@@ -2890,9 +2891,16 @@ flatpak_dir_pull (FlatpakDir          *self,
                           subdirs_arg ? (const char **)subdirs_arg->pdata : NULL,
                           ref, rev, results, flatpak_flags, flags,
                           progress,
-                          cancellable, error))
+                          cancellable, &my_error))
     {
+
+      /* Ensure that cache directory gets cleaned on OOD */
+      if (g_error_matches (my_error, G_IO_ERROR, G_FILE_ERROR_NOSPC))
+        flatpak_rm_rf (ostree_repo_get_path (repo), cancellable, NULL);
+
+      g_propagate_error (error, g_steal_pointer (&my_error));
       g_prefix_error (error, _("While pulling %s from remote %s: "), ref, repository);
+
       goto out;
     }
 
@@ -3023,6 +3031,7 @@ flatpak_dir_pull_untrusted_local (FlatpakDir          *self,
   g_autoptr(GVariant) extra_data_sources = NULL;
   g_autoptr(GPtrArray) subdirs_arg = NULL;
   gboolean ret = FALSE;
+  g_autoptr(GError) my_error = NULL;
 
   if (!flatpak_dir_ensure_repo (self, cancellable, error))
     return FALSE;
@@ -3194,9 +3203,16 @@ flatpak_dir_pull_untrusted_local (FlatpakDir          *self,
   if (!repo_pull_one_local_untrusted (self, self->repo, remote_name, url,
                                       subdirs_arg ? (const char **)subdirs_arg->pdata : NULL,
                                       ref, checksum, progress,
-                                      cancellable, error))
+                                      cancellable, &my_error))
     {
+
+      /* Ensure that cache directory gets cleaned on OOD */
+      if (g_error_matches (my_error, G_IO_ERROR, G_FILE_ERROR_NOSPC))
+        flatpak_rm_rf (ostree_repo_get_path (self->repo), cancellable, NULL);
+
+      g_propagate_error (error, g_steal_pointer (&my_error));
       g_prefix_error (error, _("While pulling %s from remote %s: "), ref, remote_name);
+
       goto out;
     }
 
@@ -5470,6 +5486,7 @@ flatpak_dir_install (FlatpakDir          *self,
       gboolean gpg_verify;
       g_autofree char *collection_id = NULL;
       gboolean is_oci;
+      g_autoptr(GError) my_error = NULL;
 
       system_helper = flatpak_dir_get_system_helper (self);
       g_assert (system_helper != NULL);
@@ -5611,8 +5628,16 @@ flatpak_dir_install (FlatpakDir          *self,
                                                    (const char * const *) subpaths,
                                                    installation ? installation : "",
                                                    cancellable,
-                                                   error))
+                                                   &my_error)) {
+
+        /* Ensure that we clean cache directory on OOD */
+        if (g_error_matches (my_error, G_IO_ERROR, G_FILE_ERROR_NOSPC))
+          (void) glnx_shutil_rm_rf_at (AT_FDCWD, child_repo_path, NULL, NULL);
+
+        g_propagate_error (error, g_steal_pointer (&my_error));
+
         return FALSE;
+      }
 
       if (child_repo_path)
         (void) glnx_shutil_rm_rf_at (AT_FDCWD, child_repo_path, NULL, NULL);
