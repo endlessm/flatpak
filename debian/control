@@ -8,12 +8,13 @@ Uploaders:
 Build-Depends:
  attr,
  automake (>= 1.14.1),
- bubblewrap (>= 0.1.5),
+ bubblewrap (>= 0.1.8),
  ca-certificates,
  dbus,
  debhelper (>= 10~),
  desktop-file-utils,
  dh-exec,
+ dh-python,
  docbook-xml,
  docbook-xsl,
  fuse,
@@ -30,16 +31,19 @@ Build-Depends:
  libelf-dev,
  libfuse-dev,
  libgirepository1.0-dev,
- libglib2.0-dev,
+ libglib2.0-dev (>= 2.44),
+ libgpgme11-dev (>= 1.1.8),
  libjson-glib-dev,
- libostree-dev (>= 2016.15),
+ libostree-dev (>= 2017.6),
  libpolkit-gobject-1-dev,
  libseccomp-dev,
  libsoup2.4-dev,
  libxau-dev,
+ libxml2-dev (>= 2.4),
  libxml2-utils,
  ostree,
  procps,
+ python3,
  shared-mime-info,
  xmlto,
  xsltproc,
@@ -51,7 +55,7 @@ Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/flatpak.git
 Package: flatpak
 Architecture: linux-any
 Depends:
- bubblewrap (>= 0.1.5),
+ bubblewrap (>= 0.1.8),
  fuse,
  ${misc:Depends},
  ${shlibs:Depends},
@@ -61,6 +65,7 @@ Recommends:
  gtk-update-icon-cache,
  libpam-systemd,
  shared-mime-info,
+ xdg-desktop-portal-gtk | xdg-desktop-portal-backend,
 Conflicts:
  xdg-app,
 Replaces:
@@ -87,8 +92,12 @@ Package: flatpak-builder
 Architecture: linux-any
 Section: devel
 Depends:
+ gir1.2-flatpak-1.0,
  flatpak (= ${binary:Version}),
+ ostree (>= 2017.6),
+ python3-gi,
  ${misc:Depends},
+ ${python3:Depends},
  ${shlibs:Depends},
 Recommends:
  binutils,
@@ -103,6 +112,9 @@ Description: Flatpak application building helper
  .
  flatpak-builder is a tool that makes it easy to build applications and their
  dependencies by automating the configure && make && make install steps.
+ .
+ This package also contains the flatpak-bisect script, which can be used to
+ identify the first commit that had a particular regression.
 
 Package: flatpak-tests
 Architecture: linux-any
@@ -114,7 +126,7 @@ Depends:
  flatpak (= ${binary:Version}),
  hicolor-icon-theme,
  gtk-update-icon-cache,
- ostree,
+ ostree (>= 2017.6),
  shared-mime-info,
  ${misc:Depends},
  ${shlibs:Depends},
@@ -148,7 +160,8 @@ Depends:
  gir1.2-flatpak-1.0 (= ${binary:Version}),
  libflatpak0 (= ${binary:Version}),
  libglib2.0-dev,
- libostree-dev (>= 2016.15),
+ libostree-dev (>= 2017.6),
+ libxml2-dev (>= 2.4),
  pkg-config,
  ${misc:Depends},
 Description: Application deployment framework for desktop apps (development)
@@ -176,7 +189,7 @@ Package: libflatpak0
 Architecture: linux-any
 Section: libs
 Depends:
- bubblewrap (>= 0.1.5),
+ bubblewrap (>= 0.1.8),
  ${misc:Depends},
  ${shlibs:Depends},
 Pre-Depends:

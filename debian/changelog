@@ -1,3 +1,103 @@
+flatpak (0.9.5-1) experimental; urgency=medium
+
+  * New upstream release
+
+ -- Georges Basile Stavracas Neto <georges@endlessm.com>  Mon, 05 Jun 2017 12:26:57 -0300
+
+flatpak (0.9.4-1) experimental; urgency=medium
+
+  * New upstream release
+    - Add new API to symbols file
+    - Build-depend on libxml2-dev
+    - Increase required libostree and bubblewrap versions
+  * d/p/installed-tests-Install-test-keyring2-to-the-right-place.patch:
+    Fix failure to install data for installed-tests
+  * d/p/testlibrary-Call-g_assert_no_error-first.patch:
+    Improve diagnostics on failing tests
+
+ -- Simon McVittie <smcv@debian.org>  Thu, 25 May 2017 09:57:27 +0100
+
+flatpak (0.9.3-1) experimental; urgency=medium
+
+  * New upstream release
+    - Install new man pages
+
+ -- Simon McVittie <smcv@debian.org>  Fri, 28 Apr 2017 18:17:12 +0100
+
+flatpak (0.9.2-1) experimental; urgency=medium
+
+  * New upstream release
+    - Drop all patches, applied upstream
+  * flatpak-builder: Depend on ostree, for rofiles-fuse (Closes: #859884)
+
+ -- Simon McVittie <smcv@debian.org>  Mon, 10 Apr 2017 09:31:59 +0100
+
+flatpak (0.9.1+git20170403.1-2) experimental; urgency=medium
+
+  * Build with large file support, fixing FTBFS on 32-bit
+    architectures when gpgme detects a mismatch
+  * Correct some format strings on 32-bit architectures
+
+ -- Simon McVittie <smcv@debian.org>  Tue, 04 Apr 2017 00:04:39 +0100
+
+flatpak (0.9.1+git20170403.1-1) experimental; urgency=medium
+
+  * New upstream snapshot, to merge the same fixes that are in 0.8.5
+    - Build-depend on libgpgme-dev
+    - Update d/copyright
+    - Don't (build-)depend on ostree-tests any more, ostree trivial-httpd
+      is no longer required for the tests
+    - Install a new man page
+
+ -- Simon McVittie <smcv@debian.org>  Mon, 03 Apr 2017 21:04:25 +0100
+
+flatpak (0.8.5-1) unstable; urgency=medium
+
+  * New upstream bugfix release
+  * Upstream security fixes:
+    - dbus-proxy: Fix a use-after-free (no specific exploit is known)
+      and several memory leaks
+    - system-helper: Correct the check that was meant to prevent
+      unprivileged users from downgrading system-wide-installed apps
+    - Do not allow downgrading apps to validly-signed older versions
+      unless a specific older version is requested, so that a
+      man-in-the-middle cannot cause a downgrade to an older app
+      version with a vulnerability
+  * Other upstream fixes:
+    - Increase GLib build-dependency to 2.44 (in practice this was
+      already required, there is a patch in jessie-backports to
+      relax this)
+    - Collect system extension references from all system directories,
+      not just the first that exists (upstream issue 654)
+    - Stop using ostree trivial-httpd, which is not available in
+      post-stretch ostree (upstream issues 658, 723)
+    - Be build-time compatible with post-stretch ostree (upstream
+      issue 756)
+    - Strip ?query suffix before detecting whether a URI points to a
+      .flatpakref or .flatpakrepo file (upstream issue 659)
+    - Fix a typo in help output
+  * d/tests/control: most tests now require python, for the
+    ostree-trivial-httpd replacement
+
+ -- Simon McVittie <smcv@debian.org>  Mon, 03 Apr 2017 16:35:44 +0100
+
+flatpak (0.9.1-1) experimental; urgency=medium
+
+  * d/gbp.conf, d/watch: switch to development branch for experimental
+  * New upstream development release
+    - Drop patch, applied upstream
+    - d/copyright: Update
+    - Add flatpak-bisect to the flatpak-builder package
+    - Adjust install files for rename of `flatpak remote-list` to
+      `flatpak remotes`
+    - Update symbols
+  * flatpak Recommends xdg-desktop-portal-gtk | xdg-desktop-portal-backend,
+    so that sandboxed apps can communicate with the outside world
+  * Build-depend on ostree-tests and make flatpak-tests depend on it,
+    for ostree trivial-httpd
+
+ -- Simon McVittie <smcv@debian.org>  Thu, 16 Mar 2017 11:50:46 +0000
+
 flatpak (0.8.4-3) unstable; urgency=medium
 
   * Mark the one remaining patch as applied in 0.9.1
