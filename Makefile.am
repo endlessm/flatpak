@@ -81,6 +81,7 @@ libglnx_cflags := \
 	$(BASE_CFLAGS) \
 	"-I$(libglnx_srcpath)" \
 	$(HIDDEN_VISIBILITY_CFLAGS) \
+	-std=c11 \
 	$(NULL)
 libglnx_libs := $(BASE_LIBS)
 include libglnx/Makefile-libglnx.am.inc
