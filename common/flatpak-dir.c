@@ -1712,14 +1712,37 @@ flatpak_dir_update_appstream (FlatpakDir          *self,
         }
       else
         {
+          g_autoptr(GBytes) summary_copy = NULL;
+          g_autoptr(GBytes) summary_sig_copy = NULL;
+          g_autoptr(GFile) summary_file = NULL;
+          g_autoptr(GFile) summary_sig_file = NULL;
+
           g_autoptr(OstreeRepo) child_repo = flatpak_dir_create_system_child_repo (self, &child_repo_lock, NULL, error);
           if (child_repo == NULL)
             return FALSE;
 
+          if (!flatpak_dir_remote_fetch_summary (self, remote,
+                                                 &summary_copy, &summary_sig_copy,
+                                                 cancellable, error))
+            return FALSE;
 
           if (!flatpak_dir_pull (self, remote, branch, NULL, NULL,
                                  child_repo, FLATPAK_PULL_FLAGS_NONE, OSTREE_REPO_PULL_FLAGS_MIRROR,
                                  progress, cancellable, error))
+            return FALSE;
+
+          summary_file = g_file_get_child (ostree_repo_get_path (child_repo), "summary");
+          if (!g_file_replace_contents (summary_file,
+                                        g_bytes_get_data (summary_copy, NULL),
+                                        g_bytes_get_size (summary_copy),
+                                        NULL, FALSE, 0, NULL, cancellable, NULL))
+            return FALSE;
+
+          summary_sig_file = g_file_get_child (ostree_repo_get_path (child_repo), "summary.sig");
+          if (!g_file_replace_contents (summary_sig_file,
+                                        g_bytes_get_data (summary_sig_copy, NULL),
+                                        g_bytes_get_size (summary_sig_copy),
+                                        NULL, FALSE, 0, NULL, cancellable, NULL))
             return FALSE;
 
           if (!ostree_repo_resolve_rev (child_repo, branch, TRUE, &new_checksum, error))
@@ -4887,7 +4910,10 @@ flatpak_dir_create_system_child_repo (FlatpakDir   *self,
   g_autofree char *tmpdir_name = NULL;
   g_autoptr(OstreeRepo) new_repo = NULL;
   g_autoptr(GKeyFile) config = NULL;
-  OstreeRepoMode parent_mode;
+  OstreeRepoMode mode = OSTREE_REPO_MODE_BARE_USER;
+  const char *mode_str = "bare-user";
+  g_autofree char *current_mode = NULL;
+  const char *mode_env = g_getenv ("FLATPAK_OSTREE_REPO_MODE");
 
   g_assert (!self->user);
 
@@ -4911,12 +4937,16 @@ flatpak_dir_create_system_child_repo (FlatpakDir   *self,
 
   new_repo = ostree_repo_new (repo_dir);
 
-  parent_mode = ostree_repo_get_mode (self->repo);
+  /* Allow to override the mode when user-only is needed (e.g. live systems) */
+  if (g_strcmp0 (mode_env, "user-only") == 0) {
+    mode = OSTREE_REPO_MODE_BARE_USER_ONLY;
+    mode_str = "bare-user-only";
+  }
 
   repo_dir_config = g_file_get_child (repo_dir, "config");
   if (!g_file_query_exists (repo_dir_config, NULL))
     {
-      if (!ostree_repo_create (new_repo, parent_mode, NULL, error))
+      if (!ostree_repo_create (new_repo, mode, NULL, error))
         return NULL;
     }
   else
@@ -4925,13 +4955,33 @@ flatpak_dir_create_system_child_repo (FlatpakDir   *self,
       if (!ostree_repo_open (new_repo, NULL, NULL))
         {
           flatpak_rm_rf (repo_dir, NULL, NULL);
-          if (!ostree_repo_create (new_repo, parent_mode, NULL, error))
+          if (!ostree_repo_create (new_repo, mode, NULL, error))
             return NULL;
         }
     }
 
-  /* Ensure the config is updated */
   config = ostree_repo_copy_config (new_repo);
+
+  /* Verify that the mode is the expected one; if it isn't, recreate the repo */
+  current_mode = g_key_file_get_string (config, "core", "mode", NULL);
+  if (current_mode == NULL || g_strcmp0 (current_mode, mode_str) != 0)
+    {
+      flatpak_rm_rf (repo_dir, NULL, NULL);
+
+      /* Re-initialize the object because its dir's contents have been deleted (and it
+       * holds internal references to them) */
+      g_object_unref (new_repo);
+      new_repo = ostree_repo_new (repo_dir);
+
+      if (!ostree_repo_create (new_repo, mode, NULL, error))
+        return NULL;
+
+      /* Reload the repo config */
+      g_key_file_free (config);
+      config = ostree_repo_copy_config (new_repo);
+    }
+
+  /* Ensure the config is updated */
   g_key_file_set_string (config, "core", "parent",
                          flatpak_file_get_path_cached (ostree_repo_get_path (self->repo)));
 
@@ -5056,6 +5106,10 @@ flatpak_dir_install (FlatpakDir          *self,
           /* We're pulling from a remote source, we do the network mirroring pull as a
              user and hand back the resulting data to the system-helper, that trusts us
              due to the GPG signatures in the repo */
+          g_autoptr(GBytes) summary_copy = NULL;
+          g_autoptr(GBytes) summary_sig_copy = NULL;
+          g_autoptr(GFile) summary_file = NULL;
+          g_autoptr(GFile) summary_sig_file = NULL;
 
           child_repo = flatpak_dir_create_system_child_repo (self, &child_repo_lock, NULL, error);
           if (child_repo == NULL)
@@ -5063,11 +5117,30 @@ flatpak_dir_install (FlatpakDir          *self,
 
           flatpak_flags |= FLATPAK_PULL_FLAGS_SIDELOAD_EXTRA_DATA;
 
+          if (!flatpak_dir_remote_fetch_summary (self, remote_name,
+                                                 &summary_copy, &summary_sig_copy,
+                                                 cancellable, error))
+            return FALSE;
+
           if (!flatpak_dir_pull (self, remote_name, ref, NULL, subpaths,
                                  child_repo,
                                  flatpak_flags,
                                  OSTREE_REPO_PULL_FLAGS_MIRROR,
                                  progress, cancellable, error))
+            return FALSE;
+
+          summary_file = g_file_get_child (ostree_repo_get_path (child_repo), "summary");
+          if (!g_file_replace_contents (summary_file,
+                                        g_bytes_get_data (summary_copy, NULL),
+                                        g_bytes_get_size (summary_copy),
+                                        NULL, FALSE, 0, NULL, cancellable, NULL))
+            return FALSE;
+
+          summary_sig_file = g_file_get_child (ostree_repo_get_path (child_repo), "summary.sig");
+          if (!g_file_replace_contents (summary_sig_file,
+                                        g_bytes_get_data (summary_sig_copy, NULL),
+                                        g_bytes_get_size (summary_sig_copy),
+                                        NULL, FALSE, 0, NULL, cancellable, NULL))
             return FALSE;
 
           child_repo_path = g_file_get_path (ostree_repo_get_path (child_repo));
@@ -5568,9 +5641,18 @@ flatpak_dir_update (FlatpakDir          *self,
           /* We're pulling from a remote source, we do the network mirroring pull as a
              user and hand back the resulting data to the system-helper, that trusts us
              due to the GPG signatures in the repo */
+          g_autoptr(GBytes) summary_copy = NULL;
+          g_autoptr(GBytes) summary_sig_copy = NULL;
+          g_autoptr(GFile) summary_file = NULL;
+          g_autoptr(GFile) summary_sig_file = NULL;
 
           child_repo = flatpak_dir_create_system_child_repo (self, &child_repo_lock, commit, error);
           if (child_repo == NULL)
+            return FALSE;
+
+          if (!flatpak_dir_remote_fetch_summary (self, remote_name,
+                                                 &summary_copy, &summary_sig_copy,
+                                                 cancellable, error))
             return FALSE;
 
           flatpak_flags |= FLATPAK_PULL_FLAGS_SIDELOAD_EXTRA_DATA;
@@ -5578,6 +5660,20 @@ flatpak_dir_update (FlatpakDir          *self,
                                  child_repo,
                                  flatpak_flags, OSTREE_REPO_PULL_FLAGS_MIRROR,
                                  progress, cancellable, error))
+            return FALSE;
+
+          summary_file = g_file_get_child (ostree_repo_get_path (child_repo), "summary");
+          if (!g_file_replace_contents (summary_file,
+                                        g_bytes_get_data (summary_copy, NULL),
+                                        g_bytes_get_size (summary_copy),
+                                        NULL, FALSE, 0, NULL, cancellable, NULL))
+            return FALSE;
+
+          summary_sig_file = g_file_get_child (ostree_repo_get_path (child_repo), "summary.sig");
+          if (!g_file_replace_contents (summary_sig_file,
+                                        g_bytes_get_data (summary_sig_copy, NULL),
+                                        g_bytes_get_size (summary_sig_copy),
+                                        NULL, FALSE, 0, NULL, cancellable, NULL))
             return FALSE;
 
           child_repo_path = g_file_get_path (ostree_repo_get_path (child_repo));
