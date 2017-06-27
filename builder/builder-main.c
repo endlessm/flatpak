@@ -62,6 +62,7 @@ static char *opt_default_branch;
 static char *opt_repo;
 static char *opt_subject;
 static char *opt_body;
+static char *opt_collection_id = NULL;
 static char *opt_gpg_homedir;
 static char **opt_key_ids;
 static char **opt_sources_dirs;
@@ -92,6 +93,9 @@ static GOptionEntry entries[] = {
   { "repo", 0, 0, G_OPTION_ARG_STRING, &opt_repo, "Repo to export into", "DIR"},
   { "subject", 's', 0, G_OPTION_ARG_STRING, &opt_subject, "One line subject (passed to build-export)", "SUBJECT" },
   { "body", 'b', 0, G_OPTION_ARG_STRING, &opt_body, "Full description (passed to build-export)", "BODY" },
+#ifdef FLATPAK_ENABLE_P2P
+  { "collection-id", 0, 0, G_OPTION_ARG_STRING, &opt_collection_id, "Collection ID (passed to build-export)", "COLLECTION-ID" },
+#endif  /* FLATPAK_ENABLE_P2P */
   { "gpg-sign", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_key_ids, "GPG Key ID to sign the commit with", "KEY-ID"},
   { "gpg-homedir", 0, 0, G_OPTION_ARG_STRING, &opt_gpg_homedir, "GPG Homedir to use when looking for keyrings", "HOMEDIR"},
   { "force-clean", 0, 0, G_OPTION_ARG_NONE, &opt_force_clean, "Erase previous contents of DIRECTORY", NULL },
@@ -183,6 +187,9 @@ do_export (BuilderContext *build_context,
 
   for (i = 0; opt_key_ids != NULL && opt_key_ids[i] != NULL; i++)
     g_ptr_array_add (args, g_strdup_printf ("--gpg-sign=%s", opt_key_ids[i]));
+
+  if (opt_collection_id)
+    g_ptr_array_add (args, g_strdup_printf ("--collection-id=%s", opt_collection_id));
 
   /* Additional flags. */
   va_start (ap, branch);
@@ -325,6 +332,15 @@ main (int    argc,
     return usage (context, "MANIFEST must be specified");
   manifest_rel_path = argv[argnr++];
   manifest_basename = g_path_get_basename (manifest_rel_path);
+
+#ifdef FLATPAK_ENABLE_P2P
+  if (opt_collection_id != NULL &&
+      !ostree_validate_collection_id (opt_collection_id, &error))
+    {
+      g_printerr ("‘%s’ is not a valid collection ID: %s", opt_collection_id, error->message);
+      return 1;
+    }
+#endif  /* FLATPAK_ENABLE_P2P */
 
   if (app_dir_path)
     app_dir = g_file_new_for_path (app_dir_path);
