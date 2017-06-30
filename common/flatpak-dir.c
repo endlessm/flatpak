@@ -5490,6 +5490,7 @@ flatpak_dir_ensure_bundle_remote (FlatpakDir          *self,
   GBytes *gpg_data = NULL;
   g_autofree char *to_checksum = NULL;
   g_autofree char *remote = NULL;
+  g_autofree char *collection_id = NULL;
 
   if (!flatpak_dir_ensure_repo (self, cancellable, error))
     return NULL;
@@ -5499,6 +5500,7 @@ flatpak_dir_ensure_bundle_remote (FlatpakDir          *self,
                                   &origin,
                                   NULL, &fp_metadata, NULL,
                                   &included_gpg_data,
+                                  &collection_id,
                                   error);
   if (metadata == NULL)
     return NULL;
@@ -5536,6 +5538,7 @@ flatpak_dir_ensure_bundle_remote (FlatpakDir          *self,
                                                  basename,
                                                  ref,
                                                  gpg_data,
+                                                 collection_id,
                                                  cancellable,
                                                  error);
       if (remote == NULL)
@@ -5605,7 +5608,7 @@ flatpak_dir_install_bundle (FlatpakDir          *self,
                                   &ref,
                                   &origin,
                                   NULL, NULL,
-                                  NULL, NULL,
+                                  NULL, NULL, NULL,
                                   error);
   if (metadata == NULL)
     return FALSE;
@@ -7715,6 +7718,7 @@ create_origin_remote_config (OstreeRepo   *repo,
                              const char   *title,
                              const char   *main_ref,
                              gboolean      gpg_verify,
+                             const char   *collection_id,
                              GKeyFile     *new_config)
 {
   g_autofree char *remote = NULL;
@@ -7758,6 +7762,11 @@ create_origin_remote_config (OstreeRepo   *repo,
   if (main_ref)
     g_key_file_set_string (new_config, group, "xa.main-ref", main_ref);
 
+#ifdef FLATPAK_ENABLE_P2P
+  if (collection_id)
+    g_key_file_set_string (new_config, group, "collection-id", collection_id);
+#endif  /* FLATPAK_ENABLE_P2P */
+
   return g_steal_pointer (&remote);
 }
 
@@ -7768,13 +7777,14 @@ flatpak_dir_create_origin_remote (FlatpakDir   *self,
                                   const char   *title,
                                   const char   *main_ref,
                                   GBytes       *gpg_data,
+                                  const char   *collection_id,
                                   GCancellable *cancellable,
                                   GError      **error)
 {
   g_autoptr(GKeyFile) new_config = g_key_file_new ();
   g_autofree char *remote = NULL;
 
-  remote = create_origin_remote_config (self->repo, url, id, title, main_ref, gpg_data != NULL, new_config);
+  remote = create_origin_remote_config (self->repo, url, id, title, main_ref, gpg_data != NULL, collection_id, new_config);
 
   if (!flatpak_dir_modify_remote (self, remote, new_config,
                                   gpg_data, cancellable, error))
@@ -7797,6 +7807,7 @@ flatpak_dir_parse_repofile (FlatpakDir   *self,
   g_autofree char *uri = NULL;
   g_autofree char *title = NULL;
   g_autofree char *gpg_key = NULL;
+  g_autofree char *collection_id = NULL;
   g_autofree char *default_branch = NULL;
   gboolean nodeps;
   GKeyFile *config = g_key_file_new ();
@@ -7862,6 +7873,23 @@ flatpak_dir_parse_repofile (FlatpakDir   *self,
       g_key_file_set_boolean (config, group, "gpg-verify-summary", TRUE);
     }
 
+#ifdef FLATPAK_ENABLE_P2P
+  collection_id = g_key_file_get_string (keyfile, FLATPAK_REPO_GROUP,
+                                         FLATPAK_REPO_COLLECTION_ID_KEY, NULL);
+#else  /* if !FLATPAK_ENABLE_P2P */
+  collection_id = NULL;
+#endif  /* !FLATPAK_ENABLE_P2P */
+  if (collection_id != NULL)
+    {
+      if (gpg_key == NULL)
+        {
+          flatpak_fail (error, "Collection ID requires GPG key to be provided");
+          return NULL;
+        }
+
+      g_key_file_set_string (config, group, "collection-id", collection_id);
+    }
+
   *gpg_data_out = g_steal_pointer (&gpg_data);
 
   return g_steal_pointer (&config);
@@ -7875,6 +7903,7 @@ parse_ref_file (GBytes *data,
                 char **title_out,
                 GBytes **gpg_data_out,
                 gboolean *is_runtime_out,
+                char **collection_id_out,
                 GError **error)
 {
   g_autoptr(GKeyFile) keyfile = g_key_file_new ();
@@ -7885,6 +7914,7 @@ parse_ref_file (GBytes *data,
   g_autofree char *version = NULL;
   g_autoptr(GBytes) gpg_data = NULL;
   gboolean is_runtime = FALSE;
+  g_autofree char *collection_id = NULL;
   char *str;
 
   *name_out = NULL;
@@ -7942,12 +7972,22 @@ parse_ref_file (GBytes *data,
       gpg_data = g_bytes_new_take (decoded, decoded_len);
     }
 
+#ifdef FLATPAK_ENABLE_P2P
+  collection_id = g_key_file_get_string (keyfile, FLATPAK_REF_GROUP,
+                                         FLATPAK_REF_COLLECTION_ID_KEY, NULL);
+#else  /* if !FLATPAK_ENABLE_P2P */
+  collection_id = NULL;
+#endif  /* !FLATPAK_ENABLE_P2P */
+  if (collection_id != NULL && gpg_data == NULL)
+    return flatpak_fail (error, "Collection ID requires GPG key to be provided");
+
   *name_out = g_steal_pointer (&name);
   *branch_out = g_steal_pointer (&branch);
   *url_out = g_steal_pointer (&url);
   *title_out = g_steal_pointer (&title);
   *gpg_data_out = g_steal_pointer (&gpg_data);
   *is_runtime_out = is_runtime;
+  *collection_id_out = g_steal_pointer (&collection_id);
 
   return TRUE;
 }
@@ -7968,9 +8008,10 @@ flatpak_dir_create_remote_for_ref_file (FlatpakDir *self,
   g_autofree char *ref = NULL;
   g_autofree char *remote = NULL;
   gboolean is_runtime = FALSE;
+  g_autofree char *collection_id = NULL;
   g_autoptr(GFile) deploy_dir = NULL;
 
-  if (!parse_ref_file (data, &name, &branch, &url, &title, &gpg_data, &is_runtime, error))
+  if (!parse_ref_file (data, &name, &branch, &url, &title, &gpg_data, &is_runtime, &collection_id, error))
     return FALSE;
 
   ref = flatpak_compose_ref (!is_runtime, name, branch, default_arch, error);
@@ -7988,12 +8029,12 @@ flatpak_dir_create_remote_for_ref_file (FlatpakDir *self,
     }
 
   /* First try to reuse existing remote */
-  remote = flatpak_dir_find_remote_by_uri (self, url);
+  remote = flatpak_dir_find_remote_by_uri (self, url, collection_id);
 
   if (remote == NULL)
     {
       remote = flatpak_dir_create_origin_remote (self, url, name, title, ref,
-                                                 gpg_data, NULL, error);
+                                                 gpg_data, collection_id, NULL, error);
       if (remote == NULL)
         return FALSE;
     }
@@ -8005,12 +8046,19 @@ flatpak_dir_create_remote_for_ref_file (FlatpakDir *self,
 
 char *
 flatpak_dir_find_remote_by_uri (FlatpakDir   *self,
-                                const char   *uri)
+                                const char   *uri,
+                                const char   *collection_id)
 {
   g_auto(GStrv) remotes = NULL;
 
   if (!flatpak_dir_ensure_repo (self, NULL, NULL))
     return NULL;
+
+#ifndef FLATPAK_ENABLE_P2P
+  /* If we don’t have P2P support enabled, we always want to ignore collection IDs
+   * in comparisons. */
+  collection_id = NULL;
+#endif  /* !FLATPAK_ENABLE_P2P */
 
   remotes = flatpak_dir_list_enumerated_remotes (self, NULL, NULL);
   if (remotes)
@@ -8021,14 +8069,21 @@ flatpak_dir_find_remote_by_uri (FlatpakDir   *self,
         {
           const char *remote = remotes[i];
           g_autofree char *remote_uri = NULL;
+          g_autofree char *remote_collection_id = NULL;
 
           if (!ostree_repo_remote_get_url (self->repo,
                                            remote,
                                            &remote_uri,
                                            NULL))
             continue;
+#ifdef FLATPAK_ENABLE_P2P
+          if (!ostree_repo_get_remote_option (self->repo, remote, "collection-id",
+                                              NULL, &remote_collection_id, NULL))
+            continue;
+#endif  /* FLATPAK_ENABLE_P2P */
 
-          if (strcmp (uri, remote_uri) == 0)
+          if (strcmp (uri, remote_uri) == 0 &&
+              g_strcmp0 (collection_id, remote_collection_id) == 0)
             return g_strdup (remote);
         }
     }
