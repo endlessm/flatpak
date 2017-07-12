@@ -19,7 +19,7 @@ override_dh_auto_configure:
 		--with-priv-mode=none \
 		--with-html-dir=/usr/share/doc/libflatpak-doc \
 		--with-privileged-group=sudo \
-		--with-system-bubblewrap=/usr/bin/bwrap \
+		--with-system-bubblewrap=bwrap \
 		--with-systemdsystemunitdir=/lib/systemd/system \
 		--with-external-install-dir=/var/endless-extra/flatpak \
 		$(NULL)
@@ -32,4 +32,6 @@ override_dh_install:
 	dh_install --fail-missing
 
 override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 	debian/test.sh
+endif
