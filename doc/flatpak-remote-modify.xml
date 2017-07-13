@@ -189,9 +189,8 @@
                 </para></listitem>
             </varlistentry>
 
-            <!-- FIXME: Uncomment this when enable-p2p is enabled unconditionally.
             <varlistentry>
-                <term><option>-FIXME-collection-id=COLLECTION-ID</option></term>
+                <term><option>--collection-id=COLLECTION-ID</option></term>
 
                 <listitem><para>
                     The globally unique identifier of the remote repository, to
@@ -200,7 +199,6 @@
                     remote does not provide an collection ID.
                 </para></listitem>
             </varlistentry>
-            -->
 
             <varlistentry>
                 <term><option>--url=URL</option></term>
