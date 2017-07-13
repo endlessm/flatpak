@@ -7,6 +7,8 @@ flatpak (0.9.8-0endless1) experimental; urgency=medium
     (similar to upstream's autogen.sh but much simpler), replacing
     gtk-doc.make at build time with the one in Debian's gtk-doc-tools
     (from Debian 0.8.7-4 packaging by Simon McVittie)
+  * Enable --enable-p2p configure option
+    - Uncomment experimental documentation
 
  -- Philip Withnall <withnall@endlessm.com>  Wed, 23 Aug 2017 14:05:00 +0100
 
