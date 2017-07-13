@@ -102,9 +102,8 @@
                 </para></listitem>
             </varlistentry>
 
-            <!-- FIXME: Uncomment this when enable-p2p is enabled unconditionally.
             <varlistentry>
-                <term><option>-FIXME-collection-id=COLLECTION-ID</option></term>
+                <term><option>--collection-id=COLLECTION-ID</option></term>
 
                 <listitem><para>
                     The globally unique identifier of the remote repository, to
@@ -115,7 +114,6 @@
                     the existing collection ID will be left unchanged.
                 </para></listitem>
             </varlistentry>
-            -->
 
             <varlistentry>
                 <term><option>--gpg-sign=KEYID</option></term>

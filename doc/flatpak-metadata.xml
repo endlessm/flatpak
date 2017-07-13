@@ -430,7 +430,6 @@
                         point when deleting a 'related' application or runtime.
                     </para></listitem>
                 </varlistentry>
-                <!-- FIXME: Uncomment this when enable-p2p is enabled unconditionally.
                 <varlistentry>
                     <term><option>collection-id</option> (string)</term>
                     <listitem><para>
@@ -441,7 +440,6 @@
                         application or runtime that they are for.
                     </para></listitem>
                 </varlistentry>
-                -->
             </variablelist>
         </refsect2>
         <refsect2>
