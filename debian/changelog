@@ -1,3 +1,11 @@
+flatpak (0.9.7-1endless2) experimental; urgency=medium
+
+  * Enable --enable-p2p configure option
+    - Add new experimental symbols to the symbols file
+    - Uncomment experimental documentation
+
+ -- Philip Withnall <withnall@endlessm.com>  Thu, 13 Jul 2017 12:29:00 +0100
+
 flatpak (0.9.7-1endless1) experimental; urgency=medium
 
   * Resync Debian packaging changes

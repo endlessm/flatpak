@@ -15,6 +15,7 @@ override_dh_auto_configure:
 		--enable-docbook-docs \
 		--enable-gtk-doc \
 		--enable-installed-tests \
+		--enable-p2p \
 		--libexecdir=/usr/lib/flatpak \
 		--with-priv-mode=none \
 		--with-html-dir=/usr/share/doc/libflatpak-doc \
