@@ -456,30 +456,46 @@ flatpak_get_gl_drivers (void)
       gsize new_drivers;
       char **new_drivers_c = 0;
       const char *env = g_getenv ("FLATPAK_GL_DRIVERS");
+      GPtrArray *array = g_ptr_array_new ();
+      g_autofree char *version = NULL;
+
       if (env != NULL && *env != 0)
         new_drivers_c = g_strsplit (env, ":", -1);
-      else
+      else if (g_file_get_contents ("/sys/module/nvidia/version",
+                                    &version, NULL, NULL))
         {
-          g_autofree char *nvidia_version = NULL;
           char *dot;
-          GPtrArray *array = g_ptr_array_new ();
+          g_strstrip (version);
 
-          if (g_file_get_contents ("/sys/module/nvidia/version",
-                                   &nvidia_version, NULL, NULL))
-            {
-              g_strstrip (nvidia_version);
-              /* Convert dots to dashes */
-              while ((dot = strchr (nvidia_version, '.')) != NULL)
-                *dot = '-';
-              g_ptr_array_add (array, g_strconcat ("nvidia-", nvidia_version, NULL));
-            }
-
-          g_ptr_array_add (array, (char *)"default");
-          g_ptr_array_add (array, (char *)"host");
-
-          g_ptr_array_add (array, NULL);
-          new_drivers_c = (char **)g_ptr_array_free (array, FALSE);
+          /* Convert dots to dashes */
+          while ((dot = strchr (version, '.')) != NULL)
+            *dot = '-';
+          g_ptr_array_add (array, g_strconcat ("nvidia-", version, NULL));
         }
+      else if (g_file_get_contents ("/sys/module/mali/version",
+                                    &version, NULL, NULL))
+        {
+          char *silicon;
+
+          g_strstrip (version);
+
+          /* /sys/module/mali/version contains driverversion_siliconversion and
+           * the GL extension is named siliconversion-driverversion
+           */
+          if ((silicon = strchr (version, '_')))
+            {
+              *silicon++ = '\0';
+              g_ptr_array_add (array, g_strconcat (silicon, "-", version, NULL));
+            }
+          else
+            g_ptr_array_add (array, g_strdup (version));
+        }
+
+      g_ptr_array_add (array, (char *)"default");
+      g_ptr_array_add (array, (char *)"host");
+
+      g_ptr_array_add (array, NULL);
+      new_drivers_c = (char **)g_ptr_array_free (array, FALSE);
 
       new_drivers = (gsize)new_drivers_c;
       g_once_init_leave (&drivers, new_drivers);
