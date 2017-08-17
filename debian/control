@@ -31,7 +31,7 @@ Build-Depends:
  libelf-dev,
  libgirepository1.0-dev,
  libglib2.0-dev (>= 2.44),
- libgpgme-dev (>= 1.1.8),
+ libgpgme11-dev (>= 1.1.8),
  libgtk-3-bin <!nocheck>,
  libjson-glib-dev,
  libostree-dev (>= 2018.6),
