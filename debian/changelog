@@ -1,3 +1,15 @@
+flatpak (0.9.8-0endless1) experimental; urgency=medium
+
+  * New upstream release
+    - Drop all patches as they are now upstream
+    - Bump libostree dependency to 2017.10
+  * d/rules, d/autogen.sh: Run gtkdocize as well as autoreconf
+    (similar to upstream's autogen.sh but much simpler), replacing
+    gtk-doc.make at build time with the one in Debian's gtk-doc-tools
+    (from Debian 0.8.7-4 packaging by Simon McVittie)
+
+ -- Philip Withnall <withnall@endlessm.com>  Wed, 23 Aug 2017 14:05:00 +0100
+
 flatpak (0.9.7-1endless1) experimental; urgency=medium
 
   * Resync Debian packaging changes
