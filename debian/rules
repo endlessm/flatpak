@@ -7,7 +7,11 @@ export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 	dh $@ --with=gir,python3
 
 override_dh_autoreconf:
-	dh_autoreconf --as-needed
+	dh_autoreconf \
+		--as-needed \
+		debian/autogen.sh \
+		-- \
+		$(NULL)
 
 override_dh_auto_configure:
 	dh_auto_configure -- \
@@ -15,11 +19,12 @@ override_dh_auto_configure:
 		--enable-docbook-docs \
 		--enable-gtk-doc \
 		--enable-installed-tests \
+		--enable-p2p \
 		--libexecdir=/usr/lib/flatpak \
 		--with-priv-mode=none \
 		--with-html-dir=/usr/share/doc/libflatpak-doc \
 		--with-privileged-group=sudo \
-		--with-system-bubblewrap=/usr/bin/bwrap \
+		--with-system-bubblewrap=bwrap \
 		--with-systemdsystemunitdir=/lib/systemd/system \
 		--with-external-install-dir=/var/endless-extra/flatpak \
 		$(NULL)
@@ -32,4 +37,6 @@ override_dh_install:
 	dh_install --fail-missing
 
 override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 	debian/test.sh
+endif

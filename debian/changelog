@@ -1,3 +1,57 @@
+flatpak (0.9.8-1endless1) experimental; urgency=medium
+
+  * New upstream release
+    - Drop all patches as they are now upstream
+    - Bump libostree dependency to 2017.10
+  * d/rules, d/autogen.sh: Run gtkdocize as well as autoreconf
+    (similar to upstream's autogen.sh but much simpler), replacing
+    gtk-doc.make at build time with the one in Debian's gtk-doc-tools
+    (from Debian 0.8.7-4 packaging by Simon McVittie)
+  * Enable --enable-p2p configure option
+    - Uncomment experimental documentation
+
+ -- Philip Withnall <withnall@endlessm.com>  Wed, 23 Aug 2017 14:05:00 +0100
+
+flatpak (0.9.7-1endless1) experimental; urgency=medium
+
+  * Resync Debian packaging changes
+    - Keep dependency on libgpgme11-dev instead of libgpgme-dev, as our gpgme
+      package is not up to date with Debian experimental.
+    - Keep --with-external-install-dir configure flag.
+
+ -- Philip Withnall <withnall@endlessm.com>  Wed, 12 Jul 2017 15:46:00 +0100
+
+flatpak (0.9.7-1) experimental; urgency=medium
+
+  * New upstream release
+  * d/control: Add libglib2.0-doc, libostree-doc to Build-Depends-Indep
+    so that libflatpak-doc can cross-reference those documentation
+    packages
+  * debian/test.sh: Do not ignore build-time tests' exit status
+  * d/rules: Do not run build-time tests with DEB_BUILD_OPTIONS=nocheck
+  * d/control: Do not build-depend on gnome-desktop-testing. It is only
+    used for the installed-tests.
+  * d/control: Annotate test-only build-dependencies with <!nocheck>
+  * d/patches/: Add a patch to isolate tests from $HOME more thoroughly
+
+ -- Simon McVittie <smcv@debian.org>  Tue, 04 Jul 2017 11:54:36 +0100
+
+flatpak (0.9.6-1) experimental; urgency=high
+
+  * New upstream release
+    - Security: prevent deploying files with inappropriate permissions
+      (world-writable, setuid, etc.) (Closes: #865413)
+    - Security: make ~/.local/share/flatpak private to user to defend
+      against app vendors that might have released files with
+      inappropriate permissions in the past
+    - Bump libostree build-dependency to 2017.7
+    - d/p/testlibrary-Call-g_assert_no_error-first.patch:
+      Drop, applied upstream
+  * Standards-Version: 4.0.0
+    - Use https URL for format of debian/copyright
+
+ -- Simon McVittie <smcv@debian.org>  Wed, 21 Jun 2017 15:09:59 +0100
+
 flatpak (0.9.5-1) experimental; urgency=medium
 
   * New upstream release
