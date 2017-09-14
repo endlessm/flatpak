@@ -1361,7 +1361,12 @@ flatpak_installation_install_full (FlatpakInstallation    *self,
   else
     ostree_progress = ostree_async_progress_new_and_connect (no_progress_cb, NULL);
 
-  if (!flatpak_dir_install (dir_clone, FALSE, FALSE,
+  /* Note that if the caller sets FLATPAK_INSTALL_FLAGS_NO_DEPLOY this
+   * function will always return an error, because get_ref will return NULL
+   * later (as there is no installed ref yet). */
+  if (!flatpak_dir_install (dir_clone,
+                            (flags & FLATPAK_INSTALL_FLAGS_NO_PULL),
+                            (flags & FLATPAK_INSTALL_FLAGS_NO_DEPLOY),
                             (flags & FLATPAK_INSTALL_FLAGS_NO_STATIC_DELTAS) != 0,
                             ref, remote_name, (const char **)subpaths,
                             ostree_progress, cancellable, error))
