@@ -454,6 +454,27 @@ install_from (FlatpakDir *dir,
   return TRUE;
 }
 
+static gboolean
+flatpak_resolve_single_kind (FlatpakKinds kinds, FlatpakKinds *kind, GError **error)
+{
+  g_return_val_if_fail (kind != NULL, FALSE);
+
+  if ((kinds & FLATPAK_KINDS_APP) == kinds)
+    {
+      *kind = FLATPAK_KINDS_APP;
+      return TRUE;
+    }
+
+  if ((kinds & FLATPAK_KINDS_RUNTIME) == kinds)
+    {
+      *kind = FLATPAK_KINDS_RUNTIME;
+      return TRUE;
+    }
+
+  flatpak_fail (error, _("Need to explicitly specify flatpak kind"));
+  return FALSE;
+}
+
 gboolean
 flatpak_builtin_install (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
@@ -521,8 +542,20 @@ flatpak_builtin_install (int argc, char **argv, GCancellable *cancellable, GErro
                                           &matched_kinds, &id, &arch, &branch, error))
         return FALSE;
 
-      ref = flatpak_dir_find_remote_ref (dir, remote, id, branch, default_branch, arch,
-                                         matched_kinds, &kind, cancellable, error);
+
+      if (opt_no_pull)
+        {
+          if (!flatpak_resolve_single_kind (matched_kinds, &kind, error))
+            return FALSE;
+
+          ref = flatpak_compose_ref (kind == FLATPAK_KINDS_APP, id, branch, arch, error);
+        }
+      else
+        {
+          ref = flatpak_dir_find_remote_ref (dir, remote, id, branch, default_branch, arch,
+                                             matched_kinds, &kind, cancellable, error);
+        }
+
       if (ref == NULL)
         return FALSE;
 
@@ -530,7 +563,8 @@ flatpak_builtin_install (int argc, char **argv, GCancellable *cancellable, GErro
         return FALSE;
     }
 
-  if (!flatpak_transaction_update_metadata (transaction, FALSE, cancellable, error))
+  if (!opt_no_pull &&
+      !flatpak_transaction_update_metadata (transaction, FALSE, cancellable, error))
     return FALSE;
 
   if (!flatpak_transaction_run (transaction, TRUE, cancellable, error))
