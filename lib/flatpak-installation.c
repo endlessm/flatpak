@@ -1901,7 +1901,7 @@ flatpak_installation_create_monitor (FlatpakInstallation *self,
  * flatpak_installation_list_remote_related_refs_sync:
  * @self: a #FlatpakInstallation
  * @remote_name: the name of the remote
- * @ref: the name of the remote
+ * @ref: the ref
  * @cancellable: (nullable): a #GCancellable
  * @error: return location for a #GError
  *
@@ -1958,7 +1958,7 @@ flatpak_installation_list_remote_related_refs_sync (FlatpakInstallation *self,
  * flatpak_installation_list_installed_related_refs_sync:
  * @self: a #FlatpakInstallation
  * @remote_name: the name of the remote
- * @ref: the name of the remote
+ * @ref: the ref
  * @cancellable: (nullable): a #GCancellable
  * @error: return location for a #GError
  *
