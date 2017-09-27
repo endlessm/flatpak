@@ -9494,6 +9494,7 @@ flatpak_dir_find_remote_related (FlatpakDir *self,
                   continue;
                 }
 
+              g_debug ("JPRVITA: extension %s, download-if=%s", extension, download_if);
               /* Don't download anything for "download-if=active-gl-driver"
                * extension points if there is an unmanaged extension for it
                * installed already */
@@ -9507,6 +9508,7 @@ flatpak_dir_find_remote_related (FlatpakDir *self,
                     {
                       g_autofree gchar *e = g_strconcat (extension, ".",
                                                          gl_drivers[d], NULL);
+                      g_debug ("JPRVITA: trying to find directory for %s, gl_drivers[%d]=%s", e, d, gl_drivers[d]);
                       if (flatpak_find_unmaintained_extension_dir_if_exists(e, NULL, NULL, NULL))
                         {
                           g_debug ("Skipping related extension ‘%s’ because "
