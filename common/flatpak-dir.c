@@ -9494,6 +9494,34 @@ flatpak_dir_find_remote_related (FlatpakDir *self,
                   continue;
                 }
 
+              g_debug ("JPRVITA: extension %s, download-if=%s", extension, download_if);
+              /* Don't download anything for "download-if=active-gl-driver"
+               * extension points if there is an unmanaged extension for it
+               * installed already */
+              if (g_strcmp0 (download_if, "active-gl-driver") == 0)
+                {
+                  const char **gl_drivers = flatpak_get_gl_drivers ();
+                  gboolean skip = FALSE;
+                  int d;
+
+                  for (d = 0; gl_drivers[d] != NULL; d++)
+                    {
+                      g_autofree gchar *e = g_strconcat (extension, ".",
+                                                         gl_drivers[d], NULL);
+                      g_debug ("JPRVITA: trying to find directory for %s, gl_drivers[%d]=%s", e, d, gl_drivers[d]);
+                      if (flatpak_find_unmaintained_extension_dir_if_exists(e, NULL, NULL, NULL))
+                        {
+                          g_debug ("Skipping related extension ‘%s’ because "
+                                   "‘%s’ is already deployed", extension, e);
+                          skip = TRUE;
+                          break;
+                        }
+                    }
+
+                  if (skip)
+                    continue;
+                }
+
               g_clear_pointer (&extension_collection_id, g_free);
               extension_collection_id = g_strdup (collection_id);
 
