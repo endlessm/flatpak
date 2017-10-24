@@ -11,16 +11,17 @@ Build-Depends:
  bubblewrap (>= 0.1.8),
  ca-certificates <!nocheck>,
  dbus,
- debhelper (>= 10~),
+ debhelper (>= 9),
  desktop-file-utils <!nocheck>,
+ dh-autoreconf,
  dh-exec,
+ dh-systemd,
  docbook-xml,
  docbook-xsl,
  fuse <!nocheck>,
  git <!nocheck>,
  gobject-introspection,
  gtk-doc-tools,
- gtk-update-icon-cache <!nocheck>,
  hicolor-icon-theme <!nocheck>,
  libarchive-dev (>= 2.8.0),
  libattr1-dev,
@@ -30,7 +31,8 @@ Build-Depends:
  libfuse-dev,
  libgirepository1.0-dev,
  libglib2.0-dev (>= 2.44),
- libgpgme-dev (>= 1.1.8),
+ libgpgme11-dev (>= 1.1.8),
+ libgtk-3-bin <!nocheck>,
  libjson-glib-dev,
  libostree-dev (>= 2017.10),
  libpolkit-gobject-1-dev,
@@ -63,7 +65,7 @@ Depends:
 Recommends:
  desktop-file-utils,
  hicolor-icon-theme,
- gtk-update-icon-cache,
+ libgtk-3-bin,
  libpam-systemd,
  shared-mime-info,
  xdg-desktop-portal-gtk | xdg-desktop-portal-backend,
@@ -100,13 +102,13 @@ Depends:
  ${shlibs:Depends},
 Recommends:
  binutils,
- bzr,
  elfutils,
  git,
  patch,
  unzip,
 Replaces:
  flatpak (<< 0.9.8-1~),
+Suggests: bzr
 Description: Flatpak application building helper
  Flatpak installs, manages and runs sandboxed desktop application bundles.
  See the flatpak package for a more comprehensive description.
@@ -123,7 +125,7 @@ Depends:
  desktop-file-utils,
  flatpak (= ${binary:Version}),
  hicolor-icon-theme,
- gtk-update-icon-cache,
+ libgtk-3-bin,
  ostree (>= 2017.10),
  shared-mime-info,
  ${misc:Depends},

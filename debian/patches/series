@@ -1,3 +1,4 @@
+debian/Try-gtk-3.0-version-of-the-icon-cache-utility-first.patch
 0.9.9/Fix-regression-in-devel.patch
 0.9.9/Improve-test-diagnostics.patch
 0.9.9/tests-Don-t-require-user-xattrs.patch

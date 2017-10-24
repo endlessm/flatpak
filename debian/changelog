@@ -1,3 +1,19 @@
+flatpak (0.9.8-2xenial1) UNRELEASED; urgency=medium
+
+  * Backport to xenial (T18830)
+    - Drop debhelper compat back to 9 since 10 is not in xenial.
+      + debian/compat: Drop back to debhelper 9.
+      + debian/control: Add back dh-autoreconf and dh-systemd deps.
+      + debian/rules: Add back --with autoreconf and systemd.
+    - d/p/debian/Try-gtk-3.0-version-of-the-icon-cache-utility-first.patch:
+      bring back compatibility with gtk-update-icon-cache-3.0, for
+      backports
+    - (Build-)depend on libgtk-3-bin, not gtk-update-icon-cache, for the
+      jessie backport
+    - Build-Depend on libgpgme11-dev since libgpgme-dev is not in xenial
+
+ -- Dan Nicholson <nicholson@endlessm.com>  Tue, 24 Oct 2017 14:26:51 +0000
+
 flatpak (0.9.8-2) unstable; urgency=medium
 
   * Switch git branch for unstable
@@ -272,6 +288,23 @@ flatpak (0.9.1-1) experimental; urgency=medium
 
  -- Simon McVittie <smcv@debian.org>  Thu, 16 Mar 2017 11:50:46 +0000
 
+flatpak (0.8.4-3xenial1) xenial; urgency=medium
+
+  [ Dan Nicholson ]
+  * Backport to xenial (T10694)
+    - Drop debhelper compat back to 9 since 10 is not in xenial.
+      + debian/compat: Drop back to debhelper 9.
+      + debian/control: Add back dh-autoreconf and dh-systemd deps.
+      + debian/rules: Add back --with autoreconf and systemd.
+
+  [ Simon McVittie ]
+  * d/p/debian/Try-gtk-3.0-version-of-the-icon-cache-utility-first.patch:
+    bring back compatibility with gtk-update-icon-cache-3.0, for backports
+  * (Build-)depend on libgtk-3-bin, not gtk-update-icon-cache,
+    for the jessie backport
+
+ -- Dan Nicholson <nicholson@endlessm.com>  Mon, 01 May 2017 09:18:34 -0500
+
 flatpak (0.8.4-3) unstable; urgency=medium
 
   * Mark the one remaining patch as applied in 0.9.1
@@ -466,6 +499,13 @@ flatpak (0.6.12-1) unstable; urgency=medium
     - d/libflatpak0.symbols: update
 
  -- Simon McVittie <smcv@debian.org>  Fri, 07 Oct 2016 22:41:21 +0100
+
+flatpak (0.6.11-1~bpo8+2) jessie-backports; urgency=medium
+
+  * (Build-)depend on libgtk-3-bin, not gtk-update-icon-cache,
+    for the jessie backport
+
+ -- Simon McVittie <smcv@debian.org>  Sun, 02 Oct 2016 10:43:17 +0100
 
 flatpak (0.6.11-1) unstable; urgency=medium
 
