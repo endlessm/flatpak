@@ -1,4 +1,4 @@
-flatpak (0.9.8-2xenial1) UNRELEASED; urgency=medium
+flatpak (0.9.8-2xenial1) xenial; urgency=medium
 
   [Dan Nicholson]
   * Backport to xenial (T18830)
@@ -20,7 +20,7 @@ flatpak (0.9.8-2xenial1) UNRELEASED; urgency=medium
   * Enable --enable-p2p configure option
     - Uncomment experimental documentation
 
- -- Dan Nicholson <nicholson@endlessm.com>  Tue, 24 Oct 2017 14:26:51 +0000
+ -- Dan Nicholson <nicholson@endlessm.com>  Tue, 24 Oct 2017 17:13:11 +0000
 
 flatpak (0.9.8-2) unstable; urgency=medium
 
