@@ -13,6 +13,7 @@ flatpak (0.9.8-2xenial1) UNRELEASED; urgency=medium
     - Build-Depend on libgpgme11-dev since libgpgme-dev is not in xenial
   * Drop debian/patches/0.9.9/Fix-regression-in-devel.patch as it's
     already on our main branch.
+  * Add symbol for backported flatpak_remote_get_remote_type.
 
  -- Dan Nicholson <nicholson@endlessm.com>  Tue, 24 Oct 2017 14:26:51 +0000
 
