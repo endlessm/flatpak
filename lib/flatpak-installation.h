@@ -71,6 +71,8 @@ typedef enum {
 typedef enum {
   FLATPAK_INSTALL_FLAGS_NONE             = 0,
   FLATPAK_INSTALL_FLAGS_NO_STATIC_DELTAS = (1 << 0),
+  FLATPAK_INSTALL_FLAGS_NO_DEPLOY        = (1 << 2),
+  FLATPAK_INSTALL_FLAGS_NO_PULL          = (1 << 3),
 } FlatpakInstallFlags;
 
 /**
@@ -306,5 +308,18 @@ FLATPAK_EXTERN GPtrArray    *    flatpak_installation_list_installed_related_ref
                                                                                         const char          *ref,
                                                                                         GCancellable        *cancellable,
                                                                                         GError             **error);
+
+FLATPAK_EXTERN gboolean          flatpak_installation_remove_local_ref_sync (FlatpakInstallation *self,
+                                                                             const char          *remote_name,
+                                                                             const char          *ref,
+                                                                             GCancellable        *cancellable,
+                                                                             GError              **error);
+FLATPAK_EXTERN gboolean          flatpak_installation_cleanup_local_refs_sync (FlatpakInstallation *self,
+                                                                               GCancellable        *cancellable,
+                                                                               GError              **error);
+FLATPAK_EXTERN gboolean          flatpak_installation_prune_local_repo (FlatpakInstallation *self,
+                                                                        GCancellable        *cancellable,
+                                                                        GError              **error);
+
 
 #endif /* __FLATPAK_INSTALLATION_H__ */

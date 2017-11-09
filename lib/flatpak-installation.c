@@ -1308,6 +1308,14 @@ flatpak_installation_install_ref_file (FlatpakInstallation *self,
  *
  * Install a new application or runtime.
  *
+ * Note that this function was originally written to always return a
+ * #FlatpakInstalledRef. Since 0.9.12.12, passing
+ * FLATPAK_INSTALL_FLAGS_NO_DEPLOY will only pull refs into the local flatpak
+ * repository without deploying them, however this function will
+ * be unable to provide information on the installed ref, so
+ * FLATPAK_ERROR_ONLY_PULLED will be set and the caller must respond
+ * accordingly.
+ *
  * Returns: (transfer full): The ref for the newly installed app or %NULL on failure
  */
 FlatpakInstalledRef *
@@ -1359,11 +1367,25 @@ flatpak_installation_install_full (FlatpakInstallation    *self,
   else
     ostree_progress = ostree_async_progress_new_and_connect (no_progress_cb, NULL);
 
-  if (!flatpak_dir_install (dir_clone, FALSE, FALSE,
+  if (!flatpak_dir_install (dir_clone,
+                            (flags & FLATPAK_INSTALL_FLAGS_NO_PULL) != 0,
+                            (flags & FLATPAK_INSTALL_FLAGS_NO_DEPLOY) != 0,
                             (flags & FLATPAK_INSTALL_FLAGS_NO_STATIC_DELTAS) != 0,
                             ref, remote_name, (const char **)subpaths,
                             ostree_progress, cancellable, error))
     goto out;
+
+  /* Note that if the caller sets FLATPAK_INSTALL_FLAGS_NO_DEPLOY we must
+   * always return an error, as explained above. Otherwise get_ref will
+   * always return an error. */
+  if ((flags & FLATPAK_INSTALL_FLAGS_NO_DEPLOY) != 0)
+    {
+      g_set_error (error,
+                   FLATPAK_ERROR, FLATPAK_ERROR_ONLY_PULLED,
+                   "As requested, %s was only pulled, but not installed",
+                   name);
+      goto out;
+    }
 
   result = get_ref (dir, ref, cancellable, error);
   if (result == NULL)
@@ -1393,6 +1415,14 @@ out:
  * @error: return location for a #GError
  *
  * Install a new application or runtime.
+ *
+ * Note that this function was originally written to always return a
+ * #FlatpakInstalledRef. Since 0.9.12.12, passing
+ * FLATPAK_INSTALL_FLAGS_NO_DEPLOY will only pull refs into the local flatpak
+ * repository without deploying them, however this function will
+ * be unable to provide information on the installed ref, so
+ * FLATPAK_ERROR_ONLY_PULLED will be set and the caller must respond
+ * accordingly.
  *
  * Returns: (transfer full): The ref for the newly installed app or %NULL on failure
  */
@@ -1901,7 +1931,7 @@ flatpak_installation_create_monitor (FlatpakInstallation *self,
  * flatpak_installation_list_remote_related_refs_sync:
  * @self: a #FlatpakInstallation
  * @remote_name: the name of the remote
- * @ref: the name of the remote
+ * @ref: the ref
  * @cancellable: (nullable): a #GCancellable
  * @error: return location for a #GError
  *
@@ -1958,7 +1988,7 @@ flatpak_installation_list_remote_related_refs_sync (FlatpakInstallation *self,
  * flatpak_installation_list_installed_related_refs_sync:
  * @self: a #FlatpakInstallation
  * @remote_name: the name of the remote
- * @ref: the name of the remote
+ * @ref: the ref
  * @cancellable: (nullable): a #GCancellable
  * @error: return location for a #GError
  *
@@ -2008,4 +2038,86 @@ flatpak_installation_list_installed_related_refs_sync (FlatpakInstallation *self
     }
 
   return g_steal_pointer (&refs);
+}
+
+/**
+ * flatpak_installation_remove_local_ref_sync
+ * @self: a #FlatpakInstallation
+ * @remote_name: the name of the remote
+ * @ref: the ref
+ * @cancellable: (nullable): a #GCancellable
+ * @error: return location for a #GError
+ *
+ * Remove the OSTree ref given by @remote_name:@ref from the local flatpak
+ * repository. The next time the underlying OSTree repo is pruned, objects
+ * which were attached to that ref will be removed. This is useful if you
+ * pulled a flatpak ref using flatpak_installation_install_full() and
+ * specified %FLATPAK_INSTALL_FLAGS_NO_DEPLOY but then decided not to
+ * deploy the ref later on and want to remove the local ref to prevent it
+ * from taking up disk space. Note that this will not remove the objects
+ * referred to by @ref from the underlying OSTree repo, you should use
+ * flatpak_installation_prune_local_repo() to do that.
+ *
+ * Returns: %TRUE on success
+ */
+gboolean
+flatpak_installation_remove_local_ref_sync (FlatpakInstallation *self,
+                                            const char          *remote_name,
+                                            const char          *ref,
+                                            GCancellable        *cancellable,
+                                            GError             **error)
+{
+  g_autoptr(FlatpakDir) dir = flatpak_installation_get_dir (self);
+
+  return flatpak_dir_remove_ref (dir, remote_name, ref, cancellable, error);
+}
+
+/**
+ * flatpak_installation_cleanup_local_refs_sync
+ * @self: a #FlatpakInstallation
+ * @cancellable: (nullable): a #GCancellable
+ * @error: return location for a #GError
+ *
+ * Remove all OSTree refs from the local flatpak repository which are not
+ * in a deployed state. The next time the underlying OSTree repo is pruned,
+ * objects which were attached to that ref will be removed. This is useful if
+ * you pulled a flatpak refs using flatpak_installation_install_full() and
+ * specified %FLATPAK_INSTALL_FLAGS_NO_DEPLOY but then decided not to
+ * deploy the refs later on and want to remove the local refs to prevent them
+ * from taking up disk space. Note that this will not remove the objects
+ * referred to by @ref from the underlying OSTree repo, you should use
+ * flatpak_installation_prune_local_repo() to do that.
+ *
+ * Since: 0.10.0
+ * Returns: %TRUE on success
+ */
+gboolean
+flatpak_installation_cleanup_local_refs_sync (FlatpakInstallation *self,
+                                              GCancellable        *cancellable,
+                                              GError             **error)
+{
+  g_autoptr(FlatpakDir) dir = flatpak_installation_get_dir (self);
+
+  return flatpak_dir_cleanup_undeployed_refs (dir, cancellable, error);
+}
+
+/**
+ * flatpak_installation_prune_local_repo
+ * @self: a #FlatpakInstallation
+ * @cancellable: (nullable): a #GCancellable
+ * @error: return location for a #GError
+ *
+ * Remove all orphaned OSTree objects from the underlying OSTree repo in
+ * @installation.
+ *
+ * Returns: %TRUE on success
+ */
+gboolean
+flatpak_installation_prune_local_repo (FlatpakInstallation *self,
+                                       GCancellable        *cancellable,
+                                       GError             **error)
+{
+  g_autoptr(FlatpakDir) dir = flatpak_installation_get_dir (self);
+
+  return flatpak_dir_prune (dir, cancellable, error);
 }
