@@ -3,33 +3,23 @@
 set -e
 exec 2>&1
 
-e=0
+# The tests want /sbin/ldconfig to be in PATH
+export PATH="$PATH:/usr/sbin:/sbin"
+
+# Ubuntu provides internet access via a proxy, but libostree doesn't need
+# that. However, libostree also doesn't support no_proxy, so it will try
+# to use Ubuntu's proxy for localhost, and fail to reach itself.
+unset ftp_proxy
+unset http_proxy
+unset https_proxy
+unset no_proxy
 
 # Don't pollute the home directory unless this looks like a dedicated
 # autopkgtest environment
-if [ "$(id -nu)" = adt ]; then
-	install -d ~/.flatpak-tests/
-fi
+case "$(id -nu)" in
+	(adt|debci)
+		install -d ~/.flatpak-tests/
+		;;
+esac
 
-gnome-desktop-testing-runner -l Flatpak | while read t; do
-	t="${t%% *}"
-
-	case "$t" in
-		(Flatpak/test-builder.sh.test)
-			# has more dependencies
-			continue
-			;;
-		(Flatpak/test-builder-python.sh.test)
-			# has more dependencies
-			continue
-			;;
-	esac
-
-	gnome-desktop-testing-runner "$t" < /dev/null || touch "$ADTTMP"/failed
-done
-
-if [ -e "$ADTTMP"/failed ]; then
-	exit 1
-fi
-
-exit 0
+exec gnome-desktop-testing-runner Flatpak
