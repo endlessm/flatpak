@@ -1,3 +1,23 @@
+flatpak (0.10.1-1endless0) unstable; urgency=medium
+
+  * New upstream release
+    - Adds appstream-glib as a dependency
+    - Drop some upstreamed Endless patches for config file monitoring
+
+ -- Philip Withnall <withnall@endlessm.com>  Thu, 30 Nov 2017 14:45:00 +0000
+
+flatpak (0.10.1-1) unstable; urgency=medium
+
+  * New upstream release
+    - d/copyright: Update
+    - d/control: Add build-dependency on appstream-glib
+  * d/autogen.sh: Run gtkdocize --copy. Plain gtkdocize replaces
+    gtk-doc.make with a symlink, which dh_autoreconf_clean won't remove,
+    breaking the ability to build twice in a row from the same directory.
+    (See #881915)
+
+ -- Simon McVittie <smcv@debian.org>  Mon, 27 Nov 2017 09:21:56 +0000
+
 flatpak (0.10.0-2endless0) unstable; urgency=medium
 
   * Update Debian packaging from Sid
