@@ -1709,13 +1709,16 @@ flatpak_installation_list_remote_refs_sync (FlatpakInstallation *self,
   while (g_hash_table_iter_next (&iter, &key, &value))
     {
       const char *refspec = key;
-      const char *checksum = value;
+      FlatpakRelated *related = (FlatpakRelated *) value;
       FlatpakRemoteRef *ref;
 
-      ref = flatpak_remote_ref_new (refspec, checksum, remote_name);
+      ref = flatpak_remote_ref_new (refspec, related->commit, remote_name);
 
       if (ref)
-        g_ptr_array_add (refs, ref);
+        {
+          g_object_set (ref, "collection-id", related->collection_id, NULL);
+          g_ptr_array_add (refs, ref);
+        }
     }
 
   return g_steal_pointer (&refs);

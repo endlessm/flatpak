@@ -7290,6 +7290,44 @@ flatpak_dir_remote_has_ref (FlatpakDir   *self,
   return flatpak_summary_lookup_ref (summary, collection_id, ref, NULL, NULL);
 }
 
+static void
+populate_hash_table_from_refs_map (GHashTable *ret_all_refs, GVariant *ref_map,
+                                   const gchar *collection_id)
+{
+  GVariant *value;
+  GVariantIter ref_iter;
+  g_variant_iter_init (&ref_iter, ref_map);
+  while ((child = g_variant_iter_next_value (&ref_iter)) != NULL)
+    {
+      /* helper for being able to auto-free the value */
+      g_autoptr(GVariant) child = value;
+      const char *ref_name = NULL;
+
+      g_variant_get_child (child, 0, "&s", &ref_name);
+      if (ref_name == NULL)
+        continue;
+
+      g_autoptr(GVariant) csum_v = NULL;
+      char tmp_checksum[65];
+      const guchar *csum_bytes;
+      FlatpakRelated *ref;
+
+      g_variant_get_child (child, 1, "(t@aya{sv})", NULL, &csum_v, NULL);
+      csum_bytes = ostree_checksum_bytes_peek_validate (csum_v, NULL);
+      if (csum_bytes == NULL)
+        continue;
+
+      ostree_checksum_inplace_from_bytes (csum_bytes, tmp_checksum);
+
+      ref = g_new0 (FlatpakRelated, 1);
+      ref->collection_id = g_strdup (collection_id);
+      ref->ref = g_strdup (ref_name);
+      ref->commit = g_strdup (tmp_checksum);
+
+      g_hash_table_insert (ret_all_refs, g_strdup (ref_name), ref);
+    }
+}
+
 /* This duplicates ostree_repo_list_refs so it can use flatpak_dir_remote_fetch_summary
    and get caching */
 /* FIXME: For command line completion support for collection–refs over P2P,
@@ -7304,45 +7342,37 @@ flatpak_dir_remote_list_refs (FlatpakDir       *self,
   g_autoptr(GHashTable) ret_all_refs = NULL;
   g_autoptr(GVariant) summary = NULL;
   g_autoptr(GVariant) ref_map = NULL;
+  g_autoptr(GVariant) exts = NULL;
+  g_autoptr(GVariant) collection_map = NULL;
+  const gchar *collection_id;
   GVariantIter iter;
-  GVariant *child;
 
-  ret_all_refs = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+  ret_all_refs = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+                                        (GDestroyNotify) flatpak_related_free);
 
   summary = fetch_remote_summary_file (self, remote_name, NULL, cancellable, error);
   if (summary == NULL)
     return FALSE;
 
+  /* refs that match the main collection-id */
   ref_map = g_variant_get_child_value (summary, 0);
 
-  g_variant_iter_init (&iter, ref_map);
-  while ((child = g_variant_iter_next_value (&iter)) != NULL)
+  /* refs that match other collection-ids */
+  exts = g_variant_get_child_value (summary, 1);
+
+  if (!g_variant_lookup (exts, "ostree.summary.collection-id", "&s", &collection_id))
+    collection_id = NULL;
+
+  populate_hash_table_from_refs_map (ret_all_refs, ref_map, collection_id);
+
+  collection_map = g_variant_lookup_value (exts, "ostree.summary.collection-map",
+                                           G_VARIANT_TYPE ("a{sa(s(taya{sv}))}"));
+  if (collection_map != NULL)
     {
-      const char *ref_name = NULL;
-      g_autoptr(GVariant) csum_v = NULL;
-      char tmp_checksum[65];
-
-      g_variant_get_child (child, 0, "&s", &ref_name);
-
-      if (ref_name != NULL)
-        {
-          const guchar *csum_bytes;
-
-          g_variant_get_child (child, 1, "(t@aya{sv})", NULL, &csum_v, NULL);
-          csum_bytes = ostree_checksum_bytes_peek_validate (csum_v, error);
-          if (csum_bytes == NULL)
-            return FALSE;
-
-          ostree_checksum_inplace_from_bytes (csum_bytes, tmp_checksum);
-
-          g_hash_table_insert (ret_all_refs,
-                               g_strdup (ref_name),
-                               g_strdup (tmp_checksum));
-        }
-
-      g_variant_unref (child);
+      g_variant_iter_init (&iter, collection_map);
+      while (g_variant_iter_loop (&iter, "{&s@a(s(taya{sv}))}", &collection_id, &ref_map))
+          populate_hash_table_from_refs_map (ret_all_refs, ref_map, collection_id);
     }
-
 
   *out_all_refs = g_steal_pointer (&ret_all_refs);
 

@@ -139,8 +139,9 @@ flatpak_builtin_ls_remote (int argc, char **argv, GCancellable *cancellable, GEr
   g_hash_table_iter_init (&iter, refs);
   while (g_hash_table_iter_next (&iter, &key, &value))
     {
+      FlatpakRelated *related = value;
       const char *ref = key;
-      const char *checksum = value;
+      const char *checksum = related->commit;
       const char *name = NULL;
       g_auto(GStrv) parts = NULL;
 
