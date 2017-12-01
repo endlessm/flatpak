@@ -1801,14 +1801,17 @@ flatpak_installation_list_remote_refs_sync (FlatpakInstallation *self,
   g_hash_table_iter_init (&iter, ht);
   while (g_hash_table_iter_next (&iter, &key, &value))
     {
-      const char *refspec = key;
-      const char *checksum = value;
       FlatpakRemoteRef *ref;
+      FlatpakCollectionRef *coll_ref = key;
+      const gchar *ref_commit = value;
 
-      ref = flatpak_remote_ref_new (refspec, checksum, remote_name);
+      ref = flatpak_remote_ref_new (coll_ref->ref_name, ref_commit, remote_name);
 
       if (ref)
-        g_ptr_array_add (refs, ref);
+        {
+          g_object_set (ref, "collection-id", coll_ref->collection_id, NULL);
+          g_ptr_array_add (refs, ref);
+        }
     }
 
   return g_steal_pointer (&refs);
@@ -1842,6 +1845,7 @@ flatpak_installation_fetch_remote_ref_sync (FlatpakInstallation *self,
   g_autoptr(FlatpakDir) dir = flatpak_installation_get_dir (self);
   g_autoptr(GHashTable) ht = NULL;
   g_autofree char *ref = NULL;
+  g_autoptr(FlatpakCollectionRef) coll_ref = NULL;
   const char *checksum;
 
   if (branch == NULL)
@@ -1863,7 +1867,8 @@ flatpak_installation_fetch_remote_ref_sync (FlatpakInstallation *self,
                                      branch,
                                      arch);
 
-  checksum = g_hash_table_lookup (ht, ref);
+  coll_ref = flatpak_collection_ref_new (NULL, ref);
+  checksum = g_hash_table_lookup (ht, coll_ref);
 
   if (checksum != NULL)
     return flatpak_remote_ref_new (ref, checksum, remote_name);
