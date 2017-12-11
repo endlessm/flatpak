@@ -70,7 +70,7 @@ flatpak_builtin_ls_remote (int argc, char **argv, GCancellable *cancellable, GEr
   g_autoptr(GHashTable) pref_hash = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   g_autoptr(GError) local_error = NULL;
 
-  context = g_option_context_new (_(" REMOTE - Show available runtimes and applications"));
+  context = g_option_context_new (_(" REMOTE or URI - Show available runtimes and applications"));
   g_option_context_set_translation_domain (context, GETTEXT_PACKAGE);
 
   if (!flatpak_option_context_parse (context, options, &argc, &argv, 0, &dir, cancellable, error))
@@ -80,7 +80,7 @@ flatpak_builtin_ls_remote (int argc, char **argv, GCancellable *cancellable, GEr
     opt_app = opt_runtime = TRUE;
 
   if (argc < 2)
-    return usage_error (context, _("REMOTE must be specified"), error);
+    return usage_error (context, _("REMOTE or URI must be specified"), error);
 
   if (argc > 2)
     return usage_error (context, _("Too many arguments"), error);

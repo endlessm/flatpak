@@ -1676,11 +1676,11 @@ flatpak_installation_fetch_remote_metadata_sync (FlatpakInstallation *self,
 /**
  * flatpak_installation_list_remote_refs_sync:
  * @self: a #FlatpakInstallation
- * @remote_name: the name of the remote
+ * @remote: the name of the remote, or the URI of a repository
  * @cancellable: (nullable): a #GCancellable
  * @error: return location for a #GError
  *
- * Lists all the applications and runtimes in a remote.
+ * Lists all the applications and runtimes in a remote or repository.
  *
  * Returns: (transfer container) (element-type FlatpakRemoteRef): an GPtrArray of
  *   #FlatpakRemoteRef instances
