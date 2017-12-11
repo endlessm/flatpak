@@ -592,7 +592,7 @@ make_test_app (void)
   int status;
   g_autoptr(GError) error = NULL;
   g_autofree char *arg0 = NULL;
-  char *argv[] = { NULL, "test", "", NULL };
+  char *argv[] = { NULL, "test", "", "", NULL };
   g_autofree char *argv_str = NULL;
   GSpawnFlags flags = G_SPAWN_DEFAULT;
 
