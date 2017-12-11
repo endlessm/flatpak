@@ -1852,7 +1852,7 @@ flatpak_installation_fetch_remote_metadata_sync (FlatpakInstallation *self,
 /**
  * flatpak_installation_list_remote_refs_sync:
  * @self: a #FlatpakInstallation
- * @remote_name: the name of the remote
+ * @remote: the name or URI of the remote
  * @cancellable: (nullable): a #GCancellable
  * @error: return location for a #GError
  *
