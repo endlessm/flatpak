@@ -904,6 +904,7 @@ static gboolean
 list_remotes_for_configured_remote (FlatpakInstallation  *self,
                                     const gchar          *remote_name,
                                     FlatpakDir           *dir,
+                                    gboolean              types_filter[],
                                     GPtrArray            *remotes  /* (element-type FlatpakRemote) */,
                                     GCancellable         *cancellable,
                                     GError              **error)
@@ -919,6 +920,11 @@ list_remotes_for_configured_remote (FlatpakInstallation  *self,
   g_autoptr(OstreeRepoFinder) finder_mount = NULL, finder_avahi = NULL;
   OstreeRepoFinder *finders[3] = { NULL, };
   gsize i;
+  guint finder_index = 0;
+
+  if (!types_filter[FLATPAK_REMOTE_TYPE_USB] &&
+      !types_filter[FLATPAK_REMOTE_TYPE_LAN])
+    return TRUE;
 
   /* Find the collection ID for @remote_name, or bail if there is none. */
   if (!ostree_repo_get_remote_option (flatpak_dir_get_repo (dir),
@@ -936,10 +942,17 @@ list_remotes_for_configured_remote (FlatpakInstallation  *self,
   ref.ref_name = appstream_ref;
   refs[0] = &ref;
 
-  finder_mount = OSTREE_REPO_FINDER (ostree_repo_finder_mount_new (NULL));
-  finder_avahi = OSTREE_REPO_FINDER (ostree_repo_finder_avahi_new (context));
-  finders[0] = finder_mount;
-  finders[1] = finder_avahi;
+  if (types_filter[FLATPAK_REMOTE_TYPE_USB])
+    {
+      finder_mount = OSTREE_REPO_FINDER (ostree_repo_finder_mount_new (NULL));
+      finders[finder_index++] = finder_mount;
+    }
+
+  if (types_filter[FLATPAK_REMOTE_TYPE_LAN])
+    {
+      finder_avahi = OSTREE_REPO_FINDER (ostree_repo_finder_avahi_new (context));
+      finders[finder_index++] = finder_avahi;
+    }
 
   ostree_repo_finder_avahi_start (OSTREE_REPO_FINDER_AVAHI (finder_avahi), NULL);  /* ignore failure */
   ostree_repo_find_remotes_async (flatpak_dir_get_repo (dir),
@@ -971,6 +984,73 @@ list_remotes_for_configured_remote (FlatpakInstallation  *self,
   return TRUE;
 }
 
+#ifdef FLATPAK_ENABLE_P2P
+/**
+ * flatpak_installation_list_remotes_by_type:
+ * @self: a #FlatpakInstallation
+ * @types: an array of #FlatpakRemoteType
+ * @num_types: the number of types provided in @types
+ * @cancellable: (nullable): a #GCancellable
+ * @error: return location for a #GError
+ *
+ * Lists only the remotes whose type is included in the @types argument.
+ *
+ * Returns: (transfer container) (element-type FlatpakRemote): an GPtrArray of
+ *   #FlatpakRemote instances
+ */
+#else
+static
+#endif /* FLATPAK_ENABLE_P2P */
+GPtrArray *
+flatpak_installation_list_remotes_by_type (FlatpakInstallation     *self,
+                                           const FlatpakRemoteType *types,
+                                           gsize                    num_types,
+                                           GCancellable            *cancellable,
+                                           GError                 **error)
+{
+  g_autoptr(FlatpakDir) dir = flatpak_installation_get_dir (self);
+  g_autoptr(FlatpakDir) dir_clone = NULL;
+  g_auto(GStrv) remote_names = NULL;
+  g_autoptr(GPtrArray) remotes = g_ptr_array_new_with_free_func (g_object_unref);
+  const guint NUM_FLATPAK_REMOTE_TYPES = 3;
+  gboolean types_filter[NUM_FLATPAK_REMOTE_TYPES];
+  gsize i;
+
+  remote_names = flatpak_dir_list_remotes (dir, cancellable, error);
+  if (remote_names == NULL)
+    return NULL;
+
+  /* We clone the dir here to make sure we re-read the latest ostree repo config, in case
+     it has local changes */
+  dir_clone = flatpak_dir_clone (dir);
+  if (!flatpak_dir_ensure_repo (dir_clone, cancellable, error))
+    return NULL;
+
+  for (i = 0; i < NUM_FLATPAK_REMOTE_TYPES; ++i)
+    {
+      /* If NULL or an empty array of types is passed then we include all types */
+      types_filter[i] = (num_types == 0) ? TRUE : FALSE;
+    }
+
+  for (i = 0; i < num_types; ++i)
+    types_filter[types[i]] = TRUE;
+
+  for (i = 0; remote_names[i] != NULL; ++i)
+    {
+      if (types_filter[FLATPAK_REMOTE_TYPE_STATIC])
+        g_ptr_array_add (remotes, flatpak_remote_new_with_dir (remote_names[i],
+                                                               dir_clone));
+
+      /* Add the dynamic mirrors of this remote. */
+      if (!list_remotes_for_configured_remote (self, remote_names[i], dir_clone,
+                                               types_filter, remotes,
+                                               cancellable, error))
+        return NULL;
+    }
+
+  return g_steal_pointer (&remotes);
+}
+
 /**
  * flatpak_installation_list_remotes:
  * @self: a #FlatpakInstallation
@@ -988,34 +1068,7 @@ flatpak_installation_list_remotes (FlatpakInstallation *self,
                                    GCancellable        *cancellable,
                                    GError             **error)
 {
-  g_autoptr(FlatpakDir) dir = flatpak_installation_get_dir (self);
-  g_autoptr(FlatpakDir) dir_clone = NULL;
-  g_auto(GStrv) remote_names = NULL;
-  g_autoptr(GPtrArray) remotes = g_ptr_array_new_with_free_func (g_object_unref);
-  gsize i;
-
-  remote_names = flatpak_dir_list_remotes (dir, cancellable, error);
-  if (remote_names == NULL)
-    return NULL;
-
-  /* We clone the dir here to make sure we re-read the latest ostree repo config, in case
-     it has local changes */
-  dir_clone = flatpak_dir_clone (dir);
-  if (!flatpak_dir_ensure_repo (dir_clone, cancellable, error))
-    return NULL;
-
-  for (i = 0; remote_names[i] != NULL; i++)
-    {
-      g_ptr_array_add (remotes,
-                       flatpak_remote_new_with_dir (remote_names[i], dir_clone));
-
-      /* Add the dynamic mirrors of this remote. */
-      if (!list_remotes_for_configured_remote (self, remote_names[i], dir_clone,
-                                               remotes, cancellable, error))
-        return NULL;
-    }
-
-  return g_steal_pointer (&remotes);
+  return flatpak_installation_list_remotes_by_type (self, NULL, 0, cancellable, error);
 }
 
 /**
