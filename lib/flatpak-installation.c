@@ -952,9 +952,9 @@ list_remotes_for_configured_remote (FlatpakInstallation  *self,
     {
       finder_avahi = OSTREE_REPO_FINDER (ostree_repo_finder_avahi_new (context));
       finders[finder_index++] = finder_avahi;
+      ostree_repo_finder_avahi_start (OSTREE_REPO_FINDER_AVAHI (finder_avahi), NULL);  /* ignore failure */
     }
 
-  ostree_repo_finder_avahi_start (OSTREE_REPO_FINDER_AVAHI (finder_avahi), NULL);  /* ignore failure */
   ostree_repo_find_remotes_async (flatpak_dir_get_repo (dir),
                                   (const OstreeCollectionRef * const *) refs,
                                   NULL,  /* no options */
@@ -968,7 +968,9 @@ list_remotes_for_configured_remote (FlatpakInstallation  *self,
     g_main_context_iteration (context, TRUE);
 
   results = ostree_repo_find_remotes_finish (flatpak_dir_get_repo (dir), result, error);
-  ostree_repo_finder_avahi_stop (OSTREE_REPO_FINDER_AVAHI (finder_avahi));
+
+  if (types_filter[FLATPAK_REMOTE_TYPE_LAN])
+    ostree_repo_finder_avahi_stop (OSTREE_REPO_FINDER_AVAHI (finder_avahi));
 
   g_main_context_pop_thread_default (context);
 

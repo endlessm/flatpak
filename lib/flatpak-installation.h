@@ -176,13 +176,11 @@ FLATPAK_EXTERN FlatpakInstalledRef * flatpak_installation_get_current_installed_
 FLATPAK_EXTERN GPtrArray           *flatpak_installation_list_remotes (FlatpakInstallation *self,
                                                                        GCancellable        *cancellable,
                                                                        GError             **error);
-#ifdef FLATPAK_ENABLE_P2P
 FLATPAK_EXTERN GPtrArray           *flatpak_installation_list_remotes_by_type (FlatpakInstallation     *self,
                                                                                const FlatpakRemoteType  types[],
                                                                                gsize                    num_types,
                                                                                GCancellable            *cancellable,
                                                                                GError                 **error);
-#endif /* FLATPAK_ENABLE_P2P */
 FLATPAK_EXTERN FlatpakRemote        *flatpak_installation_get_remote_by_name (FlatpakInstallation *self,
                                                                               const gchar         *name,
                                                                               GCancellable        *cancellable,
