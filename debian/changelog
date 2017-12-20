@@ -1,3 +1,19 @@
+flatpak (0.10.1-1endless1) unstable; urgency=medium
+
+  * Stop listing temporary remotes when using
+    flatpak_installation_list_remotes
+  * Add new flatpak_installation_list_remotes_by_type
+    - Update symbols file
+  * Mention in the docs the use of the URI for listing refs from remotes
+  * Use collection-refs when listing refs
+  * Add the URL to the remote when creating it from ostree
+  * tests:
+    - Cover listing refs from a remote by URL
+    - Cover listing refs with different collection IDs in remotes
+    - Make the app ID in make-test-app.sh a parameter
+
+ -- Joaquim Rocha <jrocha@endlessm.com>  Web, 20 Dec 2017 01:38:52 +0000
+
 flatpak (0.10.1-1endless0) unstable; urgency=medium
 
   * New upstream release
