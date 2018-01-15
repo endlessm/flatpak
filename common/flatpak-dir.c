@@ -6266,6 +6266,9 @@ rewrite_export_dir (const char     *app,
           if (strcmp (source_name, "search-providers") == 0 &&
               g_str_has_suffix (dent->d_name, ".ini"))
             {
+              if (g_str_has_prefix (app, "com.endlessm."))
+                continue;
+
               if (!export_ini_file (source_iter.fd, dent->d_name, INI_FILE_TYPE_SEARCH_PROVIDER,
                                     &stbuf, &new_name, cancellable, error))
                 goto out;
