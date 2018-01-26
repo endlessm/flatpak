@@ -1039,6 +1039,7 @@ flatpak_installation_list_remotes_by_type (FlatpakInstallation     *self,
 
   for (i = 0; remote_names[i] != NULL; ++i)
     {
+      g_autoptr(GError) local_error = NULL;
       if (types_filter[FLATPAK_REMOTE_TYPE_STATIC])
         g_ptr_array_add (remotes, flatpak_remote_new_with_dir (remote_names[i],
                                                                dir_clone));
@@ -1046,8 +1047,9 @@ flatpak_installation_list_remotes_by_type (FlatpakInstallation     *self,
       /* Add the dynamic mirrors of this remote. */
       if (!list_remotes_for_configured_remote (self, remote_names[i], dir_clone,
                                                types_filter, remotes,
-                                               cancellable, error))
-        return NULL;
+                                               cancellable, &local_error))
+        g_debug ("Couldn't find remotes for configured remote %s: %s",
+                 remote_names[i], local_error->message);
     }
 
   return g_steal_pointer (&remotes);
