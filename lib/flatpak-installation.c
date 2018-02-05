@@ -1990,6 +1990,7 @@ flatpak_installation_fetch_remote_ref_sync (FlatpakInstallation *self,
   g_autoptr(GHashTable) ht = NULL;
   g_autofree char *ref = NULL;
   g_autoptr(FlatpakCollectionRef) coll_ref = NULL;
+  g_autofree gchar *collection_id = NULL;
   const char *checksum;
 
   if (branch == NULL)
@@ -2006,6 +2007,13 @@ flatpak_installation_fetch_remote_ref_sync (FlatpakInstallation *self,
                                      error))
     return NULL;
 
+#ifdef FLATPAK_ENABLE_P2P
+  if (!ostree_repo_get_remote_option (flatpak_dir_get_repo (dir),
+                                      remote_name, "collection-id",
+                                      NULL, &collection_id, error))
+    return FALSE;
+#endif /* FLATPAK_ENABLE_P2P */
+
   if (kind == FLATPAK_REF_KIND_APP)
     ref = flatpak_build_app_ref (name,
                                  branch,
@@ -2015,7 +2023,7 @@ flatpak_installation_fetch_remote_ref_sync (FlatpakInstallation *self,
                                      branch,
                                      arch);
 
-  coll_ref = flatpak_collection_ref_new (NULL, ref);
+  coll_ref = flatpak_collection_ref_new (collection_id, ref);
   checksum = g_hash_table_lookup (ht, coll_ref);
 
   if (checksum != NULL)
