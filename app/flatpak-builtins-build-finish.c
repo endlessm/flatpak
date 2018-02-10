@@ -204,6 +204,8 @@ collect_exports (GFile *base, const char *app_id, GCancellable *cancellable, GEr
     "share/icons",                        /* Icons */
     "share/dbus-1/services",              /* D-Bus service files */
     "share/gnome-shell/search-providers", /* Search providers */
+    "share/eos-shell-content/splash",     /* Endless splash screens */
+    "share/eos-discovery-feed/content-providers", /* Endless DF content providers */
     NULL,
   };
   int i;
