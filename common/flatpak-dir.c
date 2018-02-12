@@ -7925,9 +7925,11 @@ char *
 flatpak_dir_get_remote_collection_id (FlatpakDir *self,
                                       const char *remote_name)
 {
-  char *collection_id = NULL;
+  g_autofree char *collection_id = NULL;
+
   repo_get_remote_collection_id (self->repo, remote_name, &collection_id, NULL);
-  return collection_id;
+
+  return g_steal_pointer (&collection_id);
 }
 
 /* FIXME: For command line completion support for collection–refs over P2P,
