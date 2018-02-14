@@ -244,7 +244,8 @@ AM_CONDITIONAL(ENABLE_DOCUMENT_PORTAL, test "x$enable_document_portal" = "xyes")
 
 PKG_CHECK_MODULES(OSTREE, [ostree-1 >= $OSTREE_REQS])
 
-PKG_CHECK_MODULES(FUSE, [fuse])
+AS_IF([test "x$enable_document_portal" = "xyes"],
+      [PKG_CHECK_MODULES(FUSE, [fuse])])
 
 # FIXME: Remove this check and the use of it when the ostree requirement is at least 2018.5
 # Note: This is 2017.12 on the Endless fork because it's behind upstream (with backports)
