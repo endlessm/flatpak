@@ -33,10 +33,11 @@ test_doc_portal_LDADD = \
 test_doc_portal_SOURCES = tests/test-doc-portal.c
 nodist_test_doc_portal_SOURCES = $(xdp_dbus_built_sources)
 
-testlibrary_CFLAGS = $(AM_CFLAGS) $(BASE_CFLAGS)
+testlibrary_CFLAGS = $(AM_CFLAGS) $(BASE_CFLAGS) $(OSTREE_CFLAGS)
 testlibrary_LDADD = \
              $(AM_LDADD) \
              $(BASE_LIBS) \
+             $(OSTREE_LIBS) \
              libglnx.la \
              libflatpak.la \
              $(NULL)
