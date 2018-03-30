@@ -75,6 +75,95 @@ child_setup (gpointer user_data)
     fcntl (g_array_index (fd_array, int, i), F_SETFD, 0);
 }
 
+static gboolean
+find_matching_extension_group_in_metakey (GKeyFile    *metakey,
+                                          const char  *id,
+                                          const char  *runtime_branch,
+                                          char       **out_extension_group,
+                                          GError     **error)
+{
+  g_auto(GStrv) groups = NULL;
+  g_autofree char *extension_prefix = NULL;
+  GStrv iter = NULL;
+
+  g_return_val_if_fail (out_extension_group != NULL, FALSE);
+
+  groups =  g_key_file_get_groups (metakey, NULL);
+  extension_prefix = g_strconcat (FLATPAK_METADATA_GROUP_PREFIX_EXTENSION,
+                                  id,
+                                  NULL);
+
+  for (iter = groups; *iter != NULL; ++iter)
+    {
+      const char *group_name = *iter;
+      if (g_str_has_prefix (group_name, extension_prefix))
+        {
+          g_autofree char *versions_str = NULL;
+          g_autofree char *version = NULL;
+          g_autoptr(GError) local_error = NULL;
+
+          /* Check the "versions" and "version" key to see
+           * if this extension point is compatible with the
+           * extension that we are building. */
+          version = g_key_file_get_string (metakey, group_name, "version", &local_error);
+          if (version == NULL)
+            {
+              if (!g_error_matches (local_error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_KEY_NOT_FOUND))
+                {
+                  g_propagate_error (error, g_steal_pointer (&local_error));
+                  return FALSE;
+                }
+
+              g_clear_error (&local_error);
+            }
+          else
+            {
+              /* Check if there is a match and return, otherwise continue,
+               * since it is an error to have both "version" and "versions"
+               * in the metakey for this entry */
+              if (g_strcmp0 (version, runtime_branch) == 0)
+                {
+                  *out_extension_group = g_strdup (group_name);
+                  return TRUE;
+                }
+
+              continue;
+            }
+
+          /* Check "versions" */
+          versions_str = g_key_file_get_string (metakey, group_name, "versions", &local_error);
+          if (versions_str == NULL)
+            {
+              if (!g_error_matches (local_error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_KEY_NOT_FOUND))
+                {
+                  g_propagate_error (error, g_steal_pointer (&local_error));
+                  return FALSE;
+                }
+
+              g_clear_error (&local_error);
+            }
+          else
+            {
+              /* Split the string on semicolon and check every verson */
+              g_auto(GStrv) versions = g_strsplit (versions_str, ";", -1);
+              GStrv version_iter = versions;
+
+              for (; *version_iter != NULL; ++version_iter)
+                {
+                  if (g_strcmp0 (*version_iter, runtime_branch) == 0)
+                    {
+                      *out_extension_group = g_strdup (*version_iter);
+                      return TRUE;
+                    }
+                }
+            }
+        }
+    }
+
+  *out_extension_group = NULL;
+  return TRUE;
+}
+
 gboolean
 flatpak_builtin_build (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
@@ -110,6 +199,7 @@ flatpak_builtin_build (int argc, char **argv, GCancellable *cancellable, GError 
   g_autoptr(FlatpakContext) app_context = NULL;
   gboolean custom_usr;
   g_auto(GStrv) runtime_ref_parts = NULL;
+  const char *runtime_ref_branch = NULL;
   FlatpakRunFlags run_flags;
   const char *group = NULL;
   const char *runtime_key = NULL;
@@ -206,6 +296,8 @@ flatpak_builtin_build (int argc, char **argv, GCancellable *cancellable, GError 
   if (runtime_ref_parts == NULL)
     return FALSE;
 
+  runtime_ref_branch = runtime_ref_parts[3];
+
   custom_usr = FALSE;
   usr = g_file_get_child (res_deploy,  opt_sdk_dir ? opt_sdk_dir : "usr");
   if (g_file_query_exists (usr, cancellable))
@@ -255,8 +347,19 @@ flatpak_builtin_build (int argc, char **argv, GCancellable *cancellable, GError 
 
       x_metakey = flatpak_deploy_get_metadata (extensionof_deploy);
 
-      x_group = g_strconcat (FLATPAK_METADATA_GROUP_PREFIX_EXTENSION, id, NULL);
-      if (!g_key_file_has_group (x_metakey, x_group))
+      /* Since we have tagged extensions, it is possible that an extension could
+       * be listed more than once in the "parent" flatpak. In that case, we should
+       * try and disambiguate by finding the extension point for the corresponding
+       * runtime version that we're building against (since we don't actually know
+       * the branch we're building right now!) */
+      if (!find_matching_extension_group_in_metakey (x_metakey,
+                                                     id,
+                                                     runtime_ref_branch,
+                                                     &x_group,
+                                                     error))
+        return FALSE;
+
+      if (x_group == NULL)
         {
           /* Failed, look for subdirectories=true parent */
           char *last_dot = strrchr (id, '.');
@@ -264,10 +367,15 @@ flatpak_builtin_build (int argc, char **argv, GCancellable *cancellable, GError 
           if (last_dot != NULL)
             {
               char *parent_id = g_strndup (id, last_dot - id);
-              g_free (x_group);
-              x_group = g_strconcat (FLATPAK_METADATA_GROUP_PREFIX_EXTENSION,
-                                     parent_id, NULL);
-              if (g_key_file_get_boolean (x_metakey, x_group,
+              if (!find_matching_extension_group_in_metakey (x_metakey,
+                                                             parent_id,
+                                                             runtime_ref_branch,
+                                                             &x_group,
+                                                             error))
+                return FALSE;
+
+              if (x_group != NULL &&
+                  g_key_file_get_boolean (x_metakey, x_group,
                                           FLATPAK_METADATA_KEY_SUBDIRECTORIES,
                                           NULL))
                 x_subdir = last_dot + 1;
