@@ -225,6 +225,10 @@ PKG_CHECK_MODULES(OSTREE, [ostree-1 >= $OSTREE_REQS])
 
 PKG_CHECK_MODULES(FUSE, [fuse])
 
+# FIXME: Remove this check and the use of it when the ostree requirement is at least 2018.5
+# Note: This is 2017.12 on the Endless fork because it's behind upstream (with backports)
+PKG_CHECK_MODULES(OSTREE_2017_12, [ostree-1 >= 2017.12], AC_DEFINE([OSTREE_VERSION_2017_12], [1], [Define if ostree is at least version 2017.12]), :)
+
 PKG_CHECK_MODULES(JSON, [json-glib-1.0])
 
 PKG_CHECK_MODULES(APPSTREAM_GLIB, [appstream-glib])
