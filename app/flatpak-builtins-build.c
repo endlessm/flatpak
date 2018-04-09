@@ -78,12 +78,14 @@ child_setup (gpointer user_data)
 static gboolean
 find_matching_extension_group_in_metakey (GKeyFile    *metakey,
                                           const char  *id,
-                                          const char  *runtime_branch,
+                                          const char  *specified_tag,
                                           char       **out_extension_group,
                                           GError     **error)
 {
   g_auto(GStrv) groups = NULL;
   g_autofree char *extension_prefix = NULL;
+  const char *last_seen_group = NULL;
+  guint n_extension_groups = 0;
   GStrv iter = NULL;
 
   g_return_val_if_fail (out_extension_group != NULL, FALSE);
@@ -96,72 +98,57 @@ find_matching_extension_group_in_metakey (GKeyFile    *metakey,
   for (iter = groups; *iter != NULL; ++iter)
     {
       const char *group_name = *iter;
-      if (g_str_has_prefix (group_name, extension_prefix))
+      const char *extension_name = NULL;;
+      g_autofree char *extension_tag = NULL;
+
+      if (!g_str_has_prefix (group_name, extension_prefix))
+        continue;
+
+      ++n_extension_groups;
+      extension_name = group_name + strlen (FLATPAK_METADATA_GROUP_PREFIX_EXTENSION);
+
+      flatpak_parse_extension_with_tag (extension_name,
+                                        NULL,
+                                        &extension_tag);
+
+      /* Check 1: Does this extension have the same tag as the
+       * specified tag? If so, use it */
+      if (specified_tag != NULL &&
+          extension_tag != NULL &&
+          g_strcmp0 (extension_tag, specified_tag) == 0)
         {
-          g_autofree char *versions_str = NULL;
-          g_autofree char *version = NULL;
-          g_autoptr(GError) local_error = NULL;
-
-          /* Check the "versions" and "version" key to see
-           * if this extension point is compatible with the
-           * extension that we are building. */
-          version = g_key_file_get_string (metakey, group_name, "version", &local_error);
-          if (version == NULL)
-            {
-              if (!g_error_matches (local_error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_KEY_NOT_FOUND))
-                {
-                  g_propagate_error (error, g_steal_pointer (&local_error));
-                  return FALSE;
-                }
-
-              g_clear_error (&local_error);
-            }
-          else
-            {
-              /* Check if there is a match and return, otherwise continue,
-               * since it is an error to have both "version" and "versions"
-               * in the metakey for this entry */
-              if (g_strcmp0 (version, runtime_branch) == 0)
-                {
-                  *out_extension_group = g_strdup (group_name);
-                  return TRUE;
-                }
-
-              continue;
-            }
-
-          /* Check "versions" */
-          versions_str = g_key_file_get_string (metakey, group_name, "versions", &local_error);
-          if (versions_str == NULL)
-            {
-              if (!g_error_matches (local_error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_KEY_NOT_FOUND))
-                {
-                  g_propagate_error (error, g_steal_pointer (&local_error));
-                  return FALSE;
-                }
-
-              g_clear_error (&local_error);
-            }
-          else
-            {
-              /* Split the string on semicolon and check every verson */
-              g_auto(GStrv) versions = g_strsplit (versions_str, ";", -1);
-              GStrv version_iter = versions;
-
-              for (; *version_iter != NULL; ++version_iter)
-                {
-                  if (g_strcmp0 (*version_iter, runtime_branch) == 0)
-                    {
-                      *out_extension_group = g_strdup (*version_iter);
-                      return TRUE;
-                    }
-                }
-            }
+          *out_extension_group = g_strdup (group_name);
+          return TRUE;
         }
+
+      /* Check 2: Keep track of this extension group as the last
+        * seen one. If it was the only one then we can use it. */
+      last_seen_group = group_name;
     }
 
-  *out_extension_group = NULL;
-  return TRUE;
+    if (n_extension_groups == 1 && last_seen_group != NULL)
+      {
+        *out_extension_group = g_strdup (last_seen_group);
+        return TRUE;
+      }
+    else if (n_extension_groups == 0)
+      {
+        /* Check 2: No extension groups, this is not an error case as
+         * we check the parent later. */
+        *out_extension_group = NULL;
+        return TRUE;
+      }
+
+  g_set_error (error,
+               G_IO_ERROR,
+               G_IO_ERROR_FAILED,
+               "Unable to resolve extension %s to a unique "
+               "extension point in the parent app or runtime. Consider "
+               "using the 'tag' key in ExtensionOf to disambiguate which "
+               "extension point to build against.",
+               id);
+
+  return FALSE;
 }
 
 gboolean
@@ -183,6 +170,7 @@ flatpak_builtin_build (int argc, char **argv, GCancellable *cancellable, GError 
   g_autofree char *runtime = NULL;
   g_autofree char *runtime_ref = NULL;
   g_autofree char *extensionof_ref = NULL;
+  g_autofree char *extensionof_tag = NULL;
   g_autofree char *extension_point = NULL;
   g_autofree char *extension_tmpfs_point = NULL;
   g_autoptr(GKeyFile) metakey = NULL;
@@ -199,7 +187,6 @@ flatpak_builtin_build (int argc, char **argv, GCancellable *cancellable, GError 
   g_autoptr(FlatpakContext) app_context = NULL;
   gboolean custom_usr;
   g_auto(GStrv) runtime_ref_parts = NULL;
-  const char *runtime_ref_branch = NULL;
   FlatpakRunFlags run_flags;
   const char *group = NULL;
   const char *runtime_key = NULL;
@@ -276,6 +263,9 @@ flatpak_builtin_build (int argc, char **argv, GCancellable *cancellable, GError 
         is_app_extension = TRUE;
     }
 
+  extensionof_tag = g_key_file_get_string (metakey,
+                                           FLATPAK_METADATA_GROUP_EXTENSION_OF,
+                                           FLATPAK_METADATA_KEY_TAG, NULL);
 
   id = g_key_file_get_string (metakey, group, FLATPAK_METADATA_KEY_NAME, error);
   if (id == NULL)
@@ -295,8 +285,6 @@ flatpak_builtin_build (int argc, char **argv, GCancellable *cancellable, GError 
   runtime_ref_parts = flatpak_decompose_ref (runtime_ref, error);
   if (runtime_ref_parts == NULL)
     return FALSE;
-
-  runtime_ref_branch = runtime_ref_parts[3];
 
   custom_usr = FALSE;
   usr = g_file_get_child (res_deploy,  opt_sdk_dir ? opt_sdk_dir : "usr");
@@ -349,12 +337,16 @@ flatpak_builtin_build (int argc, char **argv, GCancellable *cancellable, GError 
 
       /* Since we have tagged extensions, it is possible that an extension could
        * be listed more than once in the "parent" flatpak. In that case, we should
-       * try and disambiguate by finding the extension point for the corresponding
-       * runtime version that we're building against (since we don't actually know
-       * the branch we're building right now!) */
+       * try and disambiguate using the following rules:
+       *
+       * 1. Use the 'tag=' key in the ExtensionOfSection and if not found:
+       * 2. Use the only extension point available if there is only one.
+       * 3. If there are no matching groups, return NULL.
+       * 4. In all other cases, error out.
+       */
       if (!find_matching_extension_group_in_metakey (x_metakey,
                                                      id,
-                                                     runtime_ref_branch,
+                                                     extensionof_tag,
                                                      &x_group,
                                                      error))
         return FALSE;
@@ -369,7 +361,7 @@ flatpak_builtin_build (int argc, char **argv, GCancellable *cancellable, GError 
               char *parent_id = g_strndup (id, last_dot - id);
               if (!find_matching_extension_group_in_metakey (x_metakey,
                                                              parent_id,
-                                                             runtime_ref_branch,
+                                                             extensionof_tag,
                                                              &x_group,
                                                              error))
                 return FALSE;
