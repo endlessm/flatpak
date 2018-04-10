@@ -751,19 +751,9 @@ test_list_updates (void)
   FlatpakInstalledRef *update_ref = NULL;
   g_autoptr(GFileMonitor) monitor = NULL;
   gboolean res;
-  guint timeout_id;
-  gboolean timeout_reached = FALSE;
-  int changed_count = 0;
 
   inst = flatpak_installation_new_user (NULL, &error);
   g_assert_no_error (error);
-
-  monitor = flatpak_installation_create_monitor (inst, NULL, &error);
-  g_assert_no_error (error);
-  g_assert (G_IS_FILE_MONITOR (monitor));
-  g_file_monitor_set_rate_limit (monitor, 100);
-
-  g_signal_connect (monitor, "changed", G_CALLBACK (changed_cb), &changed_count);
 
   /* Install a runtime and app */
   runtime_ref = flatpak_installation_install (inst,
@@ -775,14 +765,6 @@ test_list_updates (void)
   g_assert_no_error (error);
   g_assert (FLATPAK_IS_INSTALLED_REF (runtime_ref));
 
-  timeout_id = g_timeout_add (20000, timeout_cb, &timeout_reached);
-  while (!timeout_reached && changed_count == 0)
-    g_main_context_iteration (NULL, TRUE);
-  g_source_remove (timeout_id);
-
-  g_assert_cmpint (changed_count, >, 0);
-  changed_count = 0;
-
   ref = flatpak_installation_install (inst,
                                       repo_name,
                                       FLATPAK_REF_KIND_APP,
@@ -791,15 +773,6 @@ test_list_updates (void)
                                       &error);
   g_assert_no_error (error);
   g_assert (FLATPAK_IS_INSTALLED_REF (ref));
-
-  timeout_reached = FALSE;
-  timeout_id = g_timeout_add (20000, timeout_cb, &timeout_reached);
-  while (!timeout_reached && changed_count == 0)
-    g_main_context_iteration (NULL, TRUE);
-  g_source_remove (timeout_id);
-
-  g_assert_cmpint (changed_count, >, 0);
-  changed_count = 0;
 
   /* Update the test app and list the update */
   update_test_app ();
@@ -824,15 +797,6 @@ test_list_updates (void)
   g_assert_no_error (error);
   g_assert_true (res);
 
-  timeout_reached = FALSE;
-  timeout_id = g_timeout_add (20000, timeout_cb, &timeout_reached);
-  while (!timeout_reached && changed_count == 0)
-    g_main_context_iteration (NULL, TRUE);
-  g_source_remove (timeout_id);
-
-  g_assert_cmpint (changed_count, >, 0);
-  changed_count = 0;
-
   res = flatpak_installation_uninstall (inst,
                                         flatpak_ref_get_kind (FLATPAK_REF (runtime_ref)),
                                         flatpak_ref_get_name (FLATPAK_REF (runtime_ref)),
@@ -842,14 +806,6 @@ test_list_updates (void)
                                         &error);
   g_assert_no_error (error);
   g_assert_true (res);
-
-  timeout_reached = FALSE;
-  timeout_id = g_timeout_add (20000, timeout_cb, &timeout_reached);
-  while (!timeout_reached && changed_count == 0)
-    g_main_context_iteration (NULL, TRUE);
-  g_source_remove (timeout_id);
-
-  g_assert_cmpint (changed_count, >, 0);
 }
 
 typedef enum
