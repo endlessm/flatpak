@@ -749,7 +749,6 @@ test_list_updates (void)
   g_autoptr(FlatpakInstalledRef) ref = NULL;
   g_autoptr(FlatpakInstalledRef) runtime_ref = NULL;
   FlatpakInstalledRef *update_ref = NULL;
-  g_autoptr(GFileMonitor) monitor = NULL;
   gboolean res;
 
   inst = flatpak_installation_new_user (NULL, &error);
