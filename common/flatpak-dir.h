@@ -674,6 +674,11 @@ gboolean flatpak_dir_fetch_ref_cache (FlatpakDir   *self,
                                       char        **metadata,
                                       GCancellable *cancellable,
                                       GError      **error);
+gboolean flatpak_dir_fetch_refs_cache (FlatpakDir   *self,
+                                       const char   *remote_name,
+                                       GVariant    **out_cache,
+                                       GCancellable *cancellable,
+                                       GError      **error);
 GPtrArray * flatpak_dir_find_remote_related (FlatpakDir *dir,
                                              const char *remote_name,
                                              const char *ref,
