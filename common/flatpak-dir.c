@@ -10337,6 +10337,7 @@ flatpak_dir_fetch_remote_commit (FlatpakDir   *self,
 
 gboolean
 flatpak_dir_fetch_ref_cache (FlatpakDir   *self,
+                             GVariant     *opt_cache,
                              const char   *remote_name,
                              const char   *ref,
                              guint64      *download_size,
@@ -10351,8 +10352,13 @@ flatpak_dir_fetch_ref_cache (FlatpakDir   *self,
   g_autoptr(GVariant) refdata = NULL;
   int pos;
 
-  if (!flatpak_dir_fetch_refs_cache (self, remote_name, &cache_v, cancellable, error))
-    return FALSE;
+  if (opt_cache != NULL)
+    cache_v = g_variant_ref (opt_cache);
+  else
+    {
+      if (!flatpak_dir_fetch_refs_cache (self, remote_name, &cache_v, cancellable, error))
+        return FALSE;
+    }
 
   cache = g_variant_get_child_value (cache_v, 0);
 
@@ -10508,6 +10514,7 @@ flatpak_dir_find_remote_related (FlatpakDir *self,
                                  GError **error)
 {
   g_autoptr(GVariant) summary = NULL;
+  g_autoptr(GVariant) xa_cache = NULL;
   g_autofree char *metadata = NULL;
   g_autoptr(GKeyFile) metakey = g_key_file_new ();
   int i;
@@ -10537,11 +10544,17 @@ flatpak_dir_find_remote_related (FlatpakDir *self,
   if (!repo_get_remote_collection_id (self->repo, remote_name, &collection_id, error))
     return NULL;
 
-  summary = fetch_remote_summary_file (self, remote_name, NULL, cancellable, error);
-  if (summary == NULL)
+  if (collection_id == NULL)
+    {
+      summary = fetch_remote_summary_file (self, remote_name, NULL, cancellable, error);
+      if (summary == NULL)
+        return NULL;
+    }
+
+  if (!flatpak_dir_fetch_refs_cache (self, remote_name, &xa_cache, cancellable, error))
     return NULL;
 
-  if (flatpak_dir_fetch_ref_cache (self, remote_name, ref,
+  if (flatpak_dir_fetch_ref_cache (self, xa_cache, remote_name, ref,
                                    NULL, NULL, &metadata,
                                    NULL, NULL) &&
       g_key_file_load_from_data (metakey, metadata, -1, 0, NULL))
@@ -10599,17 +10612,24 @@ flatpak_dir_find_remote_related (FlatpakDir *self,
 
               extension_ref = g_build_filename ("runtime", extension, parts[2], branch, NULL);
 
-              if (flatpak_summary_lookup_ref (summary, extension_collection_id, extension_ref, &checksum, NULL))
+              if ((summary == NULL && flatpak_cache_lookup_ref (xa_cache, extension_ref)) ||
+                  (summary != NULL && flatpak_summary_lookup_ref (summary, extension_collection_id, extension_ref, &checksum, NULL)))
                 {
                   add_related (self, related, extension, extension_collection_id, extension_ref, checksum, no_autodownload, download_if, autodelete, locale_subset);
                 }
               else if (subdirectories)
                 {
-                  g_auto(GStrv) refs = flatpak_summary_match_subrefs (summary, extension_collection_id, extension_ref);
+                  g_auto(GStrv) refs;
+                  if (summary != NULL)
+                    refs = flatpak_summary_match_subrefs (summary, extension_collection_id, extension_ref);
+                  else
+                    refs = flatpak_cache_match_subrefs (xa_cache, extension_ref);
+
                   int j;
                   for (j = 0; refs[j] != NULL; j++)
                     {
-                      if (flatpak_summary_lookup_ref (summary, extension_collection_id, refs[j], &checksum, NULL))
+                      if (summary == NULL ||
+                          flatpak_summary_lookup_ref (summary, extension_collection_id, refs[j], &checksum, NULL))
                         add_related (self, related, extension, extension_collection_id, refs[j], checksum, no_autodownload, download_if, autodelete, locale_subset);
                     }
                 }
