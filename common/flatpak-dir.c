@@ -8082,7 +8082,7 @@ add_ref_if_match (FlatpakCollectionRef  *coll_ref,
   if (opt_branch != NULL && g_strcmp0 (opt_branch, parts[3]) != 0)
     return;
 
-  if (opt_collection_id != NULL && g_strcmp0 (opt_collection_id, coll_ref->collection_id))
+  if (opt_collection_id != NULL && g_strcmp0 (opt_collection_id, coll_ref->collection_id) != 0)
     return;
 
   if (flags & FIND_MATCHING_REFS_FLAGS_KEEP_REMOTE)
@@ -8173,13 +8173,61 @@ find_matching_refs_from_cache (GVariant     *xa_cache,
 
       child = g_variant_get_child_value (cache, i);
       cur_v = g_variant_get_child_value (child, 0);
-      ref = g_variant_get_data (cur_v);
+      ref = g_variant_get_string (cur_v, NULL);
       coll_ref = flatpak_collection_ref_new (cache_collection_id, ref);
 
       add_ref_if_match (coll_ref, opt_name, opt_branch, opt_arch, cache_collection_id, kinds, flags, matched_refs);
     }
 
   return g_steal_pointer (&matched_refs);
+}
+
+static char *
+check_matches_for_default_branch (GPtrArray   *matched_refs,
+                                  const char  *name,
+                                  const char  *opt_arch,
+                                  const char  *opt_default_branch,
+                                  GError     **error)
+{
+  gsize j;
+
+  if (matched_refs->len == 1)
+    return g_strdup (g_ptr_array_index (matched_refs, 0));
+
+  /* Multiple refs found, see if some belongs to the default branch, if passed */
+  if (opt_default_branch != NULL)
+    {
+      for (j = 0; j < matched_refs->len; j++)
+        {
+          char *current_ref = g_ptr_array_index (matched_refs, j);
+          g_auto(GStrv) parts = flatpak_decompose_ref (current_ref, NULL);
+          g_assert (parts != NULL);
+
+          if (g_strcmp0 (opt_default_branch, parts[3]) == 0)
+            return g_strdup (current_ref);
+        }
+    }
+
+  /* Nothing to do other than reporting the different choices */
+  g_autoptr(GString) err = g_string_new ("");
+  g_string_printf (err, _("Multiple branches available for %s, you must specify one of: "), name);
+  g_ptr_array_sort (matched_refs, flatpak_strcmp0_ptr);
+  for (j = 0; j < matched_refs->len; j++)
+    {
+      g_auto(GStrv) parts = flatpak_decompose_ref (g_ptr_array_index (matched_refs, j), NULL);
+      g_assert (parts != NULL);
+      if (j != 0)
+        g_string_append (err, ", ");
+
+      g_string_append (err,
+                       g_strdup_printf ("%s/%s/%s",
+                                        name,
+                                        opt_arch ? opt_arch : "",
+                                        parts[3]));
+    }
+
+  flatpak_fail (error, "%s", err->str);
+  return NULL;
 }
 
 static char *
@@ -8203,7 +8251,6 @@ find_matching_ref (GHashTable *refs,
   for (i = 0; arches[i] != NULL; i++)
     {
       g_autoptr(GPtrArray) matched_refs = NULL;
-      int j;
 
       matched_refs = find_matching_refs (refs,
                                          name,
@@ -8219,43 +8266,7 @@ find_matching_ref (GHashTable *refs,
       if (matched_refs->len == 0)
         continue;
 
-      if (matched_refs->len == 1)
-        return g_strdup (g_ptr_array_index (matched_refs, 0));
-
-      /* Multiple refs found, see if some belongs to the default branch, if passed */
-      if (opt_default_branch != NULL)
-        {
-          for (j = 0; j < matched_refs->len; j++)
-            {
-              char *current_ref = g_ptr_array_index (matched_refs, j);
-              g_auto(GStrv) parts = flatpak_decompose_ref (current_ref, NULL);
-              g_assert (parts != NULL);
-
-              if (g_strcmp0 (opt_default_branch, parts[3]) == 0)
-                return g_strdup (current_ref);
-            }
-        }
-
-      /* Nothing to do other than reporting the different choices */
-      g_autoptr(GString) err = g_string_new ("");
-      g_string_printf (err, _("Multiple branches available for %s, you must specify one of: "), name);
-      g_ptr_array_sort (matched_refs, flatpak_strcmp0_ptr);
-      for (j = 0; j < matched_refs->len; j++)
-        {
-          g_auto(GStrv) parts = flatpak_decompose_ref (g_ptr_array_index (matched_refs, j), NULL);
-          g_assert (parts != NULL);
-          if (j != 0)
-            g_string_append (err, ", ");
-
-          g_string_append (err,
-                           g_strdup_printf ("%s/%s/%s",
-                                            name,
-                                            opt_arch ? opt_arch : "",
-                                            parts[3]));
-        }
-
-      flatpak_fail (error, "%s", err->str);
-      return NULL;
+      return check_matches_for_default_branch (matched_refs, name, opt_arch, opt_default_branch, error);
     }
 
   g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
@@ -8442,7 +8453,6 @@ flatpak_dir_find_remote_ref (FlatpakDir   *self,
     {
       g_autoptr(GVariant) xa_cache = NULL;
       g_autoptr(GPtrArray) matched_refs = NULL;
-      gsize j;
 
       /* Use xa.cache because we can't fetch the summary when offline */
       if (!flatpak_dir_fetch_refs_cache (self, remote, &xa_cache, cancellable, error))
@@ -8471,25 +8481,7 @@ flatpak_dir_find_remote_ref (FlatpakDir   *self,
         }
       else
         {
-          g_autoptr(GString) err = g_string_new ("");
-          g_string_printf (err, _("Multiple branches available for %s, you must specify one of: "), name);
-          g_ptr_array_sort (matched_refs, flatpak_strcmp0_ptr);
-          for (j = 0; j < matched_refs->len; j++)
-            {
-              g_auto(GStrv) parts = flatpak_decompose_ref (g_ptr_array_index (matched_refs, j), NULL);
-              g_assert (parts != NULL);
-              if (j != 0)
-                g_string_append (err, ", ");
-
-              g_string_append (err,
-                               g_strdup_printf ("%s/%s/%s",
-                                                name,
-                                                opt_arch ? opt_arch : "",
-                                                parts[3]));
-            }
-
-          flatpak_fail (error, "%s", err->str);
-          return NULL;
+          remote_ref = check_matches_for_default_branch (matched_refs, name, opt_arch, opt_default_branch, error);
         }
     }
 
