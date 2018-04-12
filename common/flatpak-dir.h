@@ -667,6 +667,7 @@ gboolean flatpak_dir_update_remote_configuration_for_repo_metadata (FlatpakDir  
                                                                     GCancellable  *cancellable,
                                                                     GError       **error);
 gboolean flatpak_dir_fetch_ref_cache (FlatpakDir   *self,
+                                      GVariant     *opt_cache,
                                       const char   *remote_name,
                                       const char   *ref,
                                       guint64      *download_size,

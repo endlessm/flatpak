@@ -2001,7 +2001,7 @@ flatpak_installation_fetch_remote_size_sync (FlatpakInstallation *self,
   if (dir == NULL)
     return FALSE;
 
-  return flatpak_dir_fetch_ref_cache (dir, remote_name, full_ref,
+  return flatpak_dir_fetch_ref_cache (dir, NULL, remote_name, full_ref,
                                       download_size, installed_size,
                                       NULL,
                                       cancellable,
@@ -2036,7 +2036,7 @@ flatpak_installation_fetch_remote_metadata_sync (FlatpakInstallation *self,
   if (dir == NULL)
     return NULL;
 
-  if (!flatpak_dir_fetch_ref_cache (dir, remote_name, full_ref,
+  if (!flatpak_dir_fetch_ref_cache (dir, NULL, remote_name, full_ref,
                                     NULL, NULL,
                                     &res,
                                     cancellable, error))
@@ -2336,6 +2336,9 @@ flatpak_installation_create_monitor (FlatpakInstallation *self,
  * reference should be installed/updated with the app, and
  * flatpak_related_ref_should_delete () returns TRUE if it
  * should be uninstalled with the main ref.
+ *
+ * The "commit" property of the returned FlatpakRelatedRefs is not
+ * guaranteed to be non-%NULL.
  *
  * Returns: (transfer container) (element-type FlatpakRelatedRef): a GPtrArray of
  *   #FlatpakRelatedRef instances

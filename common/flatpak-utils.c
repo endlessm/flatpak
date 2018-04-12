@@ -2755,6 +2755,57 @@ summary_find_refs_list (GVariant   *summary,
   return g_steal_pointer (&refs);
 }
 
+/* Note: This function relies on the similar structure in both xa.cache and summary refs lists */
+static void
+_match_subrefs (GPtrArray  *matched_refs,
+                GVariant   *haystack,
+                const char *ref)
+{
+  gsize n, i;
+  g_auto(GStrv) parts = NULL;
+  g_autofree char *parts_prefix = NULL;
+  g_autofree char *ref_prefix = NULL;
+  g_autofree char *ref_suffix = NULL;
+
+  /* Match against the refs. */
+  parts = g_strsplit (ref, "/", 0);
+  parts_prefix = g_strconcat (parts[1], ".", NULL);
+
+  ref_prefix = g_strconcat (parts[0], "/", NULL);
+  ref_suffix = g_strconcat ("/", parts[2], "/", parts[3], NULL);
+
+  n = g_variant_n_children (haystack);
+  for (i = 0; i < n; i++)
+    {
+      g_autoptr(GVariant) child = NULL;
+      g_autoptr(GVariant) cur_v = NULL;
+      const char *cur;
+      const char *id_start;
+
+      child = g_variant_get_child_value (haystack, i);
+      cur_v = g_variant_get_child_value (child, 0);
+      cur = g_variant_get_string (cur_v, NULL);
+
+      /* Must match type */
+      if (!g_str_has_prefix (cur, ref_prefix))
+        continue;
+
+      /* Must match arch & branch */
+      if (!g_str_has_suffix (cur, ref_suffix))
+        continue;
+
+      id_start = strchr (cur, '/');
+      if (id_start == NULL)
+        continue;
+
+      /* But only prefix of id */
+      if (!g_str_has_prefix (id_start + 1, parts_prefix))
+        continue;
+
+      g_ptr_array_add (matched_refs, g_strdup (cur));
+    }
+}
+
 /* This matches all refs from @collection_id that have ref, followed by '.'  as prefix */
 char **
 flatpak_summary_match_subrefs (GVariant   *summary,
@@ -2763,55 +2814,28 @@ flatpak_summary_match_subrefs (GVariant   *summary,
 {
   g_autoptr(GVariant) refs = NULL;
   GPtrArray *res = g_ptr_array_new ();
-  gsize n, i;
-  g_auto(GStrv) parts = NULL;
-  g_autofree char *parts_prefix = NULL;
-  g_autofree char *ref_prefix = NULL;
-  g_autofree char *ref_suffix = NULL;
 
   /* Work out which refs list to use, based on the @collection_id. */
   refs = summary_find_refs_list (summary, collection_id);
 
   if (refs != NULL)
-    {
-      /* Match against the refs. */
-      parts = g_strsplit (ref, "/", 0);
-      parts_prefix = g_strconcat (parts[1], ".", NULL);
+    _match_subrefs (res, refs, ref);
 
-      ref_prefix = g_strconcat (parts[0], "/", NULL);
-      ref_suffix = g_strconcat ("/", parts[2], "/", parts[3], NULL);
+  g_ptr_array_add (res, NULL);
+  return (char **)g_ptr_array_free (res, FALSE);
+}
 
-      n = g_variant_n_children (refs);
-      for (i = 0; i < n; i++)
-        {
-          g_autoptr(GVariant) child = NULL;
-          g_autoptr(GVariant) cur_v = NULL;
-          const char *cur;
-          const char *id_start;
+/* This searches xa.cache data rather than the summary */
+char **
+flatpak_cache_match_subrefs (GVariant   *xa_cache,
+                             const char *ref)
+{
+  g_autoptr(GVariant) refs = NULL;
+  GPtrArray *res = g_ptr_array_new ();
 
-          child = g_variant_get_child_value (refs, i);
-          cur_v = g_variant_get_child_value (child, 0);
-          cur = g_variant_get_data (cur_v);
+  refs = g_variant_get_child_value (xa_cache, 0);
 
-          /* Must match type */
-          if (!g_str_has_prefix (cur, ref_prefix))
-            continue;
-
-          /* Must match arch & branch */
-          if (!g_str_has_suffix (cur, ref_suffix))
-            continue;
-
-          id_start = strchr (cur, '/');
-          if (id_start == NULL)
-            continue;
-
-          /* But only prefix of id */
-          if (!g_str_has_prefix (id_start + 1, parts_prefix))
-            continue;
-
-          g_ptr_array_add (res, g_strdup (cur));
-        }
-    }
+  _match_subrefs (res, refs, ref);
 
   g_ptr_array_add (res, NULL);
   return (char **)g_ptr_array_free (res, FALSE);
@@ -2852,6 +2876,17 @@ flatpak_summary_lookup_ref (GVariant    *summary,
     *out_variant = g_steal_pointer (&reftargetdata);
 
   return TRUE;
+}
+
+gboolean
+flatpak_cache_lookup_ref (GVariant    *xa_cache,
+                          const char  *ref)
+{
+  g_autoptr(GVariant) refs = NULL;
+
+  refs = g_variant_get_child_value (xa_cache, 0);
+
+  return flatpak_variant_bsearch_str (refs, ref, NULL);
 }
 
 gboolean

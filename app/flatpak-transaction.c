@@ -485,7 +485,7 @@ flatpak_transaction_add_ref (FlatpakTransaction *self,
 
   if (metadata == NULL && remote != NULL)
     {
-      if (flatpak_dir_fetch_ref_cache (self->dir, remote, ref, NULL, NULL, &remote_metadata, NULL, &local_error))
+      if (flatpak_dir_fetch_ref_cache (self->dir, NULL, remote, ref, NULL, NULL, &remote_metadata, NULL, &local_error))
         metadata = remote_metadata;
       else
         {
