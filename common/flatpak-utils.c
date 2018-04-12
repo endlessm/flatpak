@@ -2755,7 +2755,8 @@ summary_find_refs_list (GVariant   *summary,
   return g_steal_pointer (&refs);
 }
 
-/* Note: This function relies on the similar structure in both xa.cache and summary refs lists */
+/* Note: This function relies on the similar structure of both `xa.cache` (type: `a{s(tts)}`)
+ * and summary refs lists (type: `a(s(taya{sv}))`). */
 static void
 _match_subrefs (GPtrArray  *matched_refs,
                 GVariant   *haystack,
