@@ -4618,13 +4618,23 @@ export_desktop_file (const char   *app,
 
   for (i = 0; groups[i] != NULL; i++)
     {
+      g_auto(GStrv) flatpak_run_opts = g_key_file_get_string_list (keyfile, groups[i], "X-Flatpak-RunOptions", NULL, NULL);
+      g_autofree char *flatpak_run_args = format_flatpak_run_args_from_run_opts (flatpak_run_opts);
+
+      g_key_file_remove_key (keyfile, groups[i], "X-Flatpak-RunOptions", NULL);
       g_key_file_remove_key (keyfile, groups[i], "TryExec", NULL);
 
       /* Remove this to make sure nothing tries to execute it outside the sandbox*/
       g_key_file_remove_key (keyfile, groups[i], "X-GNOME-Bugzilla-ExtraInfoScript", NULL);
 
       new_exec = g_string_new ("");
-      g_string_append_printf (new_exec, FLATPAK_BINDIR "/flatpak run --branch=%s --arch=%s", escaped_branch, escaped_arch);
+      g_string_append_printf (new_exec,
+                              FLATPAK_BINDIR "/flatpak run --branch=%s --arch=%s",
+                              escaped_branch,
+                              escaped_arch);
+
+      if (flatpak_run_args != NULL)
+        g_string_append_printf (new_exec, "%s", flatpak_run_args);
 
       old_exec = g_key_file_get_string (keyfile, groups[i], "Exec", NULL);
       if (old_exec && g_shell_parse_argv (old_exec, &old_argc, &old_argv, NULL) && old_argc >= 1)
