@@ -4570,6 +4570,26 @@ export_mime_file (int           parent_fd,
   return TRUE;
 }
 
+static char *
+format_flatpak_run_args_from_run_opts (GStrv flatpak_run_args)
+{
+  GString *str = g_string_new ("");
+  GStrv iter = flatpak_run_args;
+
+  if (flatpak_run_args == NULL)
+    return NULL;
+
+  for (; *iter != NULL; ++iter)
+    {
+      if (g_strcmp0 (*iter, "no-a11y-bus") == 0)
+        g_string_append_printf (str, " --no-a11y-bus");
+      else if (g_strcmp0 (*iter, "no-documents-portal") == 0)
+        g_string_append_printf (str, " --no-documents-portal");
+    }
+
+  return g_string_free (str, FALSE);
+}
+
 static gboolean
 export_desktop_file (const char   *app,
                      const char   *branch,
