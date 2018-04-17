@@ -5439,7 +5439,8 @@ flatpak_run_app (const char     *app_ref,
                                       runtime_ref, app_context, &app_info_path, error))
     return FALSE;
 
-  add_document_portal_args (bwrap, app_ref_parts[1], &doc_mount_path);
+  if (!(flags & FLATPAK_RUN_FLAG_NO_DOCUMENTS_PORTAL))
+    add_document_portal_args (bwrap, app_ref_parts[1], &doc_mount_path);
 
   if (!flatpak_run_add_environment_args (bwrap, app_info_path, flags,
                                          app_ref_parts[1], app_context, app_id_dir, &exports, cancellable, error))
