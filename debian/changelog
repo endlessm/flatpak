@@ -1,5 +1,6 @@
-flatpak (0.10.4-1xenial1) UNRELEASED; urgency=medium
+flatpak (0.10.4-1xenial1) xenial; urgency=medium
 
+  [Dan Nicholson]
   * Resync packaging changes (T22022):
     - Drop debhelper compat back to 9 since 10 is not in xenial.
       + debian/compat: Drop back to debhelper 9.
@@ -12,8 +13,17 @@ flatpak (0.10.4-1xenial1) UNRELEASED; urgency=medium
       jessie backport
     - Build-Depend on libgpgme11-dev since libgpgme-dev is not in xenial
     - Enable --enable-p2p configure option
+  * Drop Only-require-FUSE-if-we-re-still-building-the-document-po.patch
+    as it's been applied to the upstream branch
+  * Add symbol for flatpak_installation_list_remotes_by_type (T20078)
 
- -- Dan Nicholson <nicholson@endlessm.com>  Tue, 17 Apr 2018 14:48:39 -0500
+  [Simon McVittie]
+  * Remove Rules-Requires-Root: no, which is not supported by stable's
+    gobject-introspection, debhelper, dpkg
+  * Revert gobject-introspection dependency to be unversioned, since the
+    version was only required for Rules-Requires-Root
+
+ -- Dan Nicholson <nicholson@endlessm.com>  Thu, 19 Apr 2018 11:16:41 -0500
 
 flatpak (0.10.4-1) unstable; urgency=medium
 
