@@ -268,8 +268,8 @@ AC_SUBST([SUDO_BIN])
 # included.
 AC_ARG_ENABLE([p2p],
   [AS_HELP_STRING([--enable-p2p],
-                  [Enable unstable peer to peer support [default=no]])],,
-  [enable_p2p=no])
+                  [Enable unstable peer to peer support [default=yes]])],,
+  [enable_p2p=yes])
 AS_IF([test x$enable_p2p = xyes],[
   PKG_CHECK_MODULES(OSTREE, [ostree-1 >= $OSTREE_P2P_REQS])
 
