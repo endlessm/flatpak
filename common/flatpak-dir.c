@@ -7710,7 +7710,7 @@ cached_summary_new (GBytes *bytes,
     summary->bytes_sig = g_bytes_ref (bytes_sig);
   summary->url = g_strdup (url);
   summary->remote = g_strdup (remote);
-  summary->time = g_get_monotonic_time ();
+  summary->time = time
   return summary;
 }
 
@@ -7732,7 +7732,7 @@ flatpak_dir_lookup_cached_summary (FlatpakDir  *self,
   summary = g_hash_table_lookup (self->summary_cache, name);
   if (summary)
     {
-      guint64 now = g_get_monotonic_time ();
+      guint64 now = g_get_real_time ();
       if ((now - summary->time) < (1000 * 1000 * (SUMMARY_CACHE_TIMEOUT_SEC)) &&
           strcmp (url, summary->url) == 0)
         {
