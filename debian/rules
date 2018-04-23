@@ -35,6 +35,7 @@ endif
 
 override_dh_auto_configure:
 	dh_auto_configure -- \
+		--disable-document-portal \
 		--enable-installed-tests \
 		--enable-p2p \
 		--libexecdir=/usr/lib/flatpak \
@@ -53,7 +54,7 @@ override_dh_install:
 	dh_install
 
 override_dh_missing:
-	dh_missing --list-missing
+	dh_missing --fail-missing
 
 override_dh_auto_test-arch:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
