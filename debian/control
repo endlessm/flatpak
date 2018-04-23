@@ -16,23 +16,22 @@ Build-Depends:
  dh-exec (>= 0.23~),
  docbook-xml <!nodoc>,
  docbook-xsl <!nodoc>,
- fuse <!nocheck>,
+ gnupg <!nocheck>,
  gobject-introspection (>= 1.54.1-2~),
  gtk-doc-tools,
  gtk-update-icon-cache <!nocheck>,
  hicolor-icon-theme <!nocheck>,
- libappstream-glib-dev,
+ libappstream-glib-dev (>= 0.5.10),
  libarchive-dev (>= 2.8.0),
  libattr1-dev,
  libcap-dev,
  libdw-dev,
  libelf-dev,
- libfuse-dev,
  libgirepository1.0-dev,
  libglib2.0-dev (>= 2.44),
  libgpgme-dev (>= 1.1.8),
  libjson-glib-dev,
- libostree-dev (>= 2017.12),
+ libostree-dev (>= 2017.14),
  libpolkit-gobject-1-dev,
  libseccomp-dev,
  libsoup2.4-dev,
@@ -47,17 +46,17 @@ Build-Depends:
 Build-Depends-Indep:
  libglib2.0-doc,
  libostree-doc,
-Standards-Version: 4.1.1
+Standards-Version: 4.1.3
 Homepage: http://flatpak.org/
-Vcs-Git: https://anonscm.debian.org/git/collab-maint/flatpak.git
-Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/flatpak.git
+Vcs-Git: https://salsa.debian.org/debian/flatpak.git
+Vcs-Browser: https://salsa.debian.org/debian/flatpak
 Rules-Requires-Root: no
 
 Package: flatpak
 Architecture: linux-any
 Depends:
  bubblewrap (>= 0.1.8),
- fuse,
+ xdg-desktop-portal (>= 0.10),
  ${misc:Depends},
  ${shlibs:Depends},
 Recommends:
@@ -65,6 +64,7 @@ Recommends:
  hicolor-icon-theme,
  gtk-update-icon-cache,
  libpam-systemd,
+ policykit-1,
  shared-mime-info,
  xdg-desktop-portal-gtk | xdg-desktop-portal-backend,
 Conflicts:
@@ -97,9 +97,10 @@ Depends:
  ca-certificates,
  desktop-file-utils,
  flatpak (= ${binary:Version}),
- hicolor-icon-theme,
+ gnupg,
  gtk-update-icon-cache,
- ostree (>= 2017.12),
+ hicolor-icon-theme,
+ ostree (>= 2017.14),
  shared-mime-info,
  ${misc:Depends},
  ${shlibs:Depends},
@@ -133,7 +134,7 @@ Depends:
  gir1.2-flatpak-1.0 (= ${binary:Version}),
  libflatpak0 (= ${binary:Version}),
  libglib2.0-dev,
- libostree-dev (>= 2017.12),
+ libostree-dev (>= 2017.14),
  libxml2-dev (>= 2.4),
  pkg-config,
  ${misc:Depends},
