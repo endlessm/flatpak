@@ -78,12 +78,19 @@ static gboolean flatpak_dir_mirror_oci (FlatpakDir          *self,
                                         GCancellable        *cancellable,
                                         GError             **error);
 
-static gboolean flatpak_dir_remote_fetch_summary (FlatpakDir   *self,
-                                                  const char   *name,
-                                                  GBytes      **out_summary,
-                                                  GBytes      **out_summary_sig,
-                                                  GCancellable *cancellable,
-                                                  GError      **error);
+typedef enum
+{
+  FLATPAK_DIR_REMOTE_FETCH_SUMMARY_NONE = 0,
+  FLATPAK_DIR_REMOTE_FETCH_SUMMARY_FORCE_CACHE = (1 << 0)
+} FlatpakDirRemoteFetchSummaryFlags;
+
+static gboolean flatpak_dir_remote_fetch_summary (FlatpakDir                         *self,
+                                                  const char                         *name,
+                                                  FlatpakDirRemoteFetchSummaryFlags   flags,
+                                                  GBytes                            **out_summary,
+                                                  GBytes                            **out_summary_sig,
+                                                  GCancellable                       *cancellable,
+                                                  GError                            **error);
 
 static GVariant *fetch_remote_summary_file (FlatpakDir    *self,
                                             const char    *remote,
@@ -2193,6 +2200,7 @@ flatpak_dir_update_appstream (FlatpakDir          *self,
           /* FIXME: P2P appstream updates don't work.*/
           if (collection_id == NULL &&
               !flatpak_dir_remote_fetch_summary (self, remote,
+                                                 FLATPAK_DIR_REMOTE_FETCH_SUMMARY_FLAGS_NONE,
                                                  &summary_copy, &summary_sig_copy,
                                                  cancellable, error))
             return FALSE;
@@ -6260,6 +6268,7 @@ flatpak_dir_install (FlatpakDir          *self,
            * remotes. */
           if (collection_id == NULL &&
               !flatpak_dir_remote_fetch_summary (self, remote_name,
+                                                 FLATPAK_DIR_REMOTE_FETCH_SUMMARY_FLAGS_NONE,
                                                  &summary_copy, &summary_sig_copy,
                                                  cancellable, error))
             return FALSE;
@@ -6854,6 +6863,7 @@ flatpak_dir_update (FlatpakDir          *self,
            * remotes. */
           if (collection_id == NULL &&
               !flatpak_dir_remote_fetch_summary (self, remote_name,
+                                                 FLATPAK_DIR_REMOTE_FETCH_SUMMARY_FLAGS_NONE,
                                                  &summary_copy, &summary_sig_copy,
                                                  cancellable, error))
             return FALSE;
@@ -8125,12 +8135,13 @@ flatpak_dir_remote_make_oci_summary (FlatpakDir   *self,
 }
 
 static gboolean
-flatpak_dir_remote_fetch_summary (FlatpakDir   *self,
-                                  const char   *name,
-                                  GBytes      **out_summary,
-                                  GBytes      **out_summary_sig,
-                                  GCancellable *cancellable,
-                                  GError      **error)
+flatpak_dir_remote_fetch_summary (FlatpakDir                         *self,
+                                  const char                         *name,
+                                  FlatpakDirRemoteFetchSummaryFlags   flags,
+                                  GBytes                            **out_summary,
+                                  GBytes                            **out_summary_sig,
+                                  GCancellable                       *cancellable,
+                                  GError                            **error)
 {
   g_autofree char *url = NULL;
   gboolean is_local;
@@ -10088,6 +10099,7 @@ fetch_remote_summary_file (FlatpakDir   *self,
     return NULL;
 
   if (!flatpak_dir_remote_fetch_summary (self, remote,
+                                         FLATPAK_DIR_REMOTE_FETCH_SUMMARY_FLAGS_NONE,
                                          &summary_bytes, &summary_sig_bytes,
                                          cancellable, error))
     return NULL;
