@@ -94,6 +94,7 @@ gboolean flatpak_run_in_transient_unit (const char *app_id,
 #define FLATPAK_METADATA_GROUP_EXTENSION_OF "ExtensionOf"
 #define FLATPAK_METADATA_KEY_PRIORITY "priority"
 #define FLATPAK_METADATA_KEY_REF "ref"
+#define FLATPAK_METADATA_KEY_TAG "tag"
 
 extern const char *flatpak_context_sockets[];
 extern const char *flatpak_context_devices[];
@@ -156,6 +157,7 @@ void           flatpak_context_allow_host_fs (FlatpakContext *context);
 void           flatpak_context_set_session_bus_policy (FlatpakContext *context,
                                                        const char     *name,
                                                        FlatpakPolicy   policy);
+GStrv          flatpak_context_get_session_bus_policy_allowed_own_names (FlatpakContext *context);
 void           flatpak_context_set_system_bus_policy (FlatpakContext *context,
                                                       const char     *name,
                                                       FlatpakPolicy   policy);
@@ -184,6 +186,7 @@ typedef enum {
   FLATPAK_RUN_FLAG_DIE_WITH_PARENT    = (1 << 11),
   FLATPAK_RUN_FLAG_LOG_A11Y_BUS       = (1 << 12),
   FLATPAK_RUN_FLAG_NO_A11Y_BUS_PROXY  = (1 << 13),
+  FLATPAK_RUN_FLAG_NO_DOCUMENTS_PORTAL = (1 << 14),
 } FlatpakRunFlags;
 
 typedef struct _FlatpakExports FlatpakExports;

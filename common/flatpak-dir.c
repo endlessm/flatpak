@@ -4539,6 +4539,26 @@ export_mime_file (int           parent_fd,
   return TRUE;
 }
 
+static char *
+format_flatpak_run_args_from_run_opts (GStrv flatpak_run_args)
+{
+  GString *str = g_string_new ("");
+  GStrv iter = flatpak_run_args;
+
+  if (flatpak_run_args == NULL)
+    return NULL;
+
+  for (; *iter != NULL; ++iter)
+    {
+      if (g_strcmp0 (*iter, "no-a11y-bus") == 0)
+        g_string_append_printf (str, " --no-a11y-bus");
+      else if (g_strcmp0 (*iter, "no-documents-portal") == 0)
+        g_string_append_printf (str, " --no-documents-portal");
+    }
+
+  return g_string_free (str, FALSE);
+}
+
 static gboolean
 export_desktop_file (const char   *app,
                      const char   *branch,
@@ -4618,13 +4638,23 @@ export_desktop_file (const char   *app,
 
   for (i = 0; groups[i] != NULL; i++)
     {
+      g_auto(GStrv) flatpak_run_opts = g_key_file_get_string_list (keyfile, groups[i], "X-Flatpak-RunOptions", NULL, NULL);
+      g_autofree char *flatpak_run_args = format_flatpak_run_args_from_run_opts (flatpak_run_opts);
+
+      g_key_file_remove_key (keyfile, groups[i], "X-Flatpak-RunOptions", NULL);
       g_key_file_remove_key (keyfile, groups[i], "TryExec", NULL);
 
       /* Remove this to make sure nothing tries to execute it outside the sandbox*/
       g_key_file_remove_key (keyfile, groups[i], "X-GNOME-Bugzilla-ExtraInfoScript", NULL);
 
       new_exec = g_string_new ("");
-      g_string_append_printf (new_exec, FLATPAK_BINDIR "/flatpak run --branch=%s --arch=%s", escaped_branch, escaped_arch);
+      g_string_append_printf (new_exec,
+                              FLATPAK_BINDIR "/flatpak run --branch=%s --arch=%s",
+                              escaped_branch,
+                              escaped_arch);
+
+      if (flatpak_run_args != NULL)
+        g_string_append_printf (new_exec, "%s", flatpak_run_args);
 
       old_exec = g_key_file_get_string (keyfile, groups[i], "Exec", NULL);
       if (old_exec && g_shell_parse_argv (old_exec, &old_argc, &old_argv, NULL) && old_argc >= 1)
@@ -4693,15 +4723,56 @@ out:
   return ret;
 }
 
+typedef gboolean (*MultiplePrefixesComparisonFunc) (const char         *path,
+                                                    const char * const *prefixes);
+
+static GStrv
+get_permissible_prefixes (FlatpakContext                  *context,
+                          const char                      *source_path,
+                          const char                      *app_id,
+                          MultiplePrefixesComparisonFunc  *out_match_prefixes_func,
+                          GError                         **error)
+{
+  g_autoptr(GPtrArray) prefixes = NULL;
+
+  g_return_val_if_fail (out_match_prefixes_func != NULL, FALSE);
+
+  prefixes = g_ptr_array_new_with_free_func (g_free);
+
+  /* Create a new pointer array with prefixes including the app
+   * ID and in the case of d-bus service files, the allowed own
+   * names. */
+  g_ptr_array_add (prefixes, g_strdup (app_id));
+
+  if (flatpak_has_path_prefix (source_path, "share/dbus-1/services"))
+    {
+      g_auto(GStrv) owned_dbus_names =
+        flatpak_context_get_session_bus_policy_allowed_own_names (context);
+      GStrv iter = owned_dbus_names;
+
+      for (; *iter != NULL; ++iter)
+        g_ptr_array_add (prefixes, g_strdup (*iter));
+
+      *out_match_prefixes_func = flatpak_name_matches_one_wildcard_prefix;
+    }
+
+  g_ptr_array_add (prefixes, NULL);
+
+  *out_match_prefixes_func = flatpak_name_matches_one_prefix;
+  return (GStrv) g_ptr_array_free (g_steal_pointer (&prefixes), FALSE);
+}
+
 static gboolean
-rewrite_export_dir (const char   *app,
-                    const char   *branch,
-                    const char   *arch,
-                    GKeyFile     *metadata,
-                    int           source_parent_fd,
-                    const char   *source_name,
-                    GCancellable *cancellable,
-                    GError      **error)
+rewrite_export_dir (const char     *app,
+                    const char     *branch,
+                    const char     *arch,
+                    GKeyFile       *metadata,
+                    FlatpakContext *context,
+                    int             source_parent_fd,
+                    const char     *source_name,
+                    const char     *source_path,
+                    GCancellable   *cancellable,
+                    GError        **error)
 {
   gboolean ret = FALSE;
 
@@ -4745,16 +4816,27 @@ rewrite_export_dir (const char   *app,
 
       if (S_ISDIR (stbuf.st_mode))
         {
-          if (!rewrite_export_dir (app, branch, arch, metadata,
+          g_autofree char *path = g_build_filename (source_path, dent->d_name, NULL);
+
+          if (!rewrite_export_dir (app, branch, arch, metadata, context,
                                    source_iter.fd, dent->d_name,
-                                   cancellable, error))
+                                   path, cancellable, error))
             goto out;
         }
       else if (S_ISREG (stbuf.st_mode))
         {
+          MultiplePrefixesComparisonFunc match_prefixes_func;
+          g_auto(GStrv) permissible_prefixes = get_permissible_prefixes (context,
+                                                                         source_path,
+                                                                         app,
+                                                                         &match_prefixes_func,
+                                                                         error);
           g_autofree gchar *new_name = NULL;
 
-          if (!flatpak_has_name_prefix (dent->d_name, app))
+          if (permissible_prefixes == NULL)
+            return FALSE;
+
+          if (!match_prefixes_func (dent->d_name, (const char * const *) permissible_prefixes))
             {
               g_warning ("Non-prefixed filename %s in app %s, removing.", dent->d_name, app);
               if (unlinkat (source_iter.fd, dent->d_name, 0) != 0 && errno != ENOENT)
@@ -4829,10 +4911,29 @@ flatpak_rewrite_export_dir (const char   *app,
                             GError      **error)
 {
   gboolean ret = FALSE;
+  g_autoptr(GFile) parent = g_file_get_parent (source);
+  glnx_autofd int parentfd = -1;
+  g_autofree char *name = g_file_get_basename (source);
+
+  /* Start with a source path of "" - we don't care about
+   * the "export" component and we want to start path traversal
+   * relative to it. */
+  const char *source_path = "";
+  g_autoptr(FlatpakContext) context = flatpak_context_new ();
+
+  if (!flatpak_context_load_metadata (context, metadata, error))
+    return FALSE;
+
+  if (!glnx_opendirat (AT_FDCWD,
+                       flatpak_file_get_path_cached (parent),
+                       TRUE,
+                       &parentfd,
+                       error))
+    return FALSE;
 
   /* The fds are closed by this call */
-  if (!rewrite_export_dir (app, branch, arch, metadata,
-                           AT_FDCWD, flatpak_file_get_path_cached (source),
+  if (!rewrite_export_dir (app, branch, arch, metadata, context,
+                           parentfd, name, source_path,
                            cancellable, error))
     goto out;
 
@@ -10399,11 +10500,12 @@ flatpak_dir_find_remote_related (FlatpakDir *self,
       groups = g_key_file_get_groups (metakey, NULL);
       for (i = 0; groups[i] != NULL; i++)
         {
-          char *extension;
+          char *tagged_extension;
 
           if (g_str_has_prefix (groups[i], FLATPAK_METADATA_GROUP_PREFIX_EXTENSION) &&
-              *(extension = (groups[i] + strlen (FLATPAK_METADATA_GROUP_PREFIX_EXTENSION))) != 0)
+              *(tagged_extension = (groups[i] + strlen (FLATPAK_METADATA_GROUP_PREFIX_EXTENSION))) != 0)
             {
+              g_autofree char *extension = NULL;
               g_autofree char *version = g_key_file_get_string (metakey, groups[i],
                                                                 FLATPAK_METADATA_KEY_VERSION, NULL);
               gboolean subdirectories = g_key_file_get_boolean (metakey, groups[i],
@@ -10420,6 +10522,9 @@ flatpak_dir_find_remote_related (FlatpakDir *self,
               const char *branch;
               g_autofree char *extension_ref = NULL;
               g_autofree char *checksum = NULL;
+
+              /* Parse actual extension name */
+              flatpak_parse_extension_with_tag (tagged_extension, &extension, NULL);
 
               if (version)
                 branch = version;
@@ -10559,11 +10664,12 @@ flatpak_dir_find_local_related (FlatpakDir *self,
       groups = g_key_file_get_groups (metakey, NULL);
       for (i = 0; groups[i] != NULL; i++)
         {
-          char *extension;
+          char *tagged_extension;
 
           if (g_str_has_prefix (groups[i], FLATPAK_METADATA_GROUP_PREFIX_EXTENSION) &&
-              *(extension = (groups[i] + strlen (FLATPAK_METADATA_GROUP_PREFIX_EXTENSION))) != 0)
+              *(tagged_extension = (groups[i] + strlen (FLATPAK_METADATA_GROUP_PREFIX_EXTENSION))) != 0)
             {
+              g_autofree char *extension = NULL;
               g_autofree char *version = g_key_file_get_string (metakey, groups[i],
                                                                 FLATPAK_METADATA_KEY_VERSION, NULL);
               gboolean subdirectories = g_key_file_get_boolean (metakey, groups[i],
@@ -10581,6 +10687,9 @@ flatpak_dir_find_local_related (FlatpakDir *self,
               g_autofree char *prefixed_extension_ref = NULL;
               g_autofree char *checksum = NULL;
               g_autofree char *extension_collection_id = NULL;
+
+              /* Parse actual extension name */
+              flatpak_parse_extension_with_tag (tagged_extension, &extension, NULL);
 
               if (version)
                 branch = version;

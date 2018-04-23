@@ -793,6 +793,50 @@ flatpak_has_name_prefix (const char *string,
     !is_valid_name_character (*rest, FALSE);
 }
 
+gboolean
+flatpak_name_matches_one_prefix (const char         *name,
+                                 const char * const *prefixes)
+{
+  const char * const *iter = prefixes;
+
+  for (; *iter != NULL; ++iter)
+    if (flatpak_has_name_prefix (name, *iter))
+      return TRUE;
+
+  return FALSE;
+}
+
+gboolean
+flatpak_name_matches_one_wildcard_prefix (const char         *name,
+                                          const char * const *wildcarded_prefixes)
+{
+  const char * const *iter = wildcarded_prefixes;
+  g_autofree char *name_without_suffix = g_strdup (name);
+
+  char *first_dot = strrchr (name_without_suffix, '.');
+  *first_dot = '\0';
+
+  for (; *iter != NULL; ++iter)
+    {
+      const char *maybe_wildcarded_prefix = *iter;
+
+      if (g_str_has_suffix (maybe_wildcarded_prefix, ".*"))
+        {
+          g_autofree char *truncated_wildcarded_prefix = g_strndup (maybe_wildcarded_prefix,
+                                                                    strlen (maybe_wildcarded_prefix) - 2);
+
+          if (flatpak_has_name_prefix (name_without_suffix, truncated_wildcarded_prefix))
+            return TRUE;
+        }
+      else if (g_strcmp0 (name_without_suffix, maybe_wildcarded_prefix) == 0)
+        {
+          return TRUE;
+        }
+    }
+
+  return FALSE;
+}
+
 static gboolean
 is_valid_initial_branch_character (gint c)
 {
@@ -4380,6 +4424,31 @@ add_extension (GKeyFile   *metakey,
   return res;
 }
 
+void
+flatpak_parse_extension_with_tag (const char  *extension,
+                                  char       **name,
+                                  char       **tag)
+{
+  const char *tag_chr = strchr (extension, '@');
+
+  if (tag_chr)
+    {
+      if (name != NULL)
+        *name = g_strndup (extension, tag_chr - extension);
+
+      /* Everything after the @ */
+      if (tag != NULL)
+        *tag = g_strdup (tag_chr + 1);
+
+      return;
+    }
+
+  if (name != NULL)
+    *name = g_strdup (extension);
+
+  if (tag != NULL)
+    *tag = NULL;
+}
 
 GList *
 flatpak_list_extensions (GKeyFile   *metakey,
@@ -4409,8 +4478,11 @@ flatpak_list_extensions (GKeyFile   *metakey,
           g_auto(GStrv) versions = g_key_file_get_string_list (metakey, groups[i],
                                                                FLATPAK_METADATA_KEY_VERSIONS,
                                                                NULL, NULL);
+          g_autofree char *name = NULL;
           const char *default_branches[] = { default_branch, NULL};
           const char **branches;
+
+          flatpak_parse_extension_with_tag (extension, &name, NULL);
 
           if (versions)
             branches = (const char **)versions;
@@ -4422,7 +4494,7 @@ flatpak_list_extensions (GKeyFile   *metakey,
             }
 
           for (j = 0; branches[j] != NULL; j++)
-            res = add_extension (metakey, groups[i], extension, arch, branches[j], res);
+            res = add_extension (metakey, groups[i], name, arch, branches[j], res);
         }
     }
 

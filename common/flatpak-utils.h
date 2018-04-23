@@ -145,6 +145,10 @@ gboolean flatpak_summary_lookup_ref (GVariant    *summary,
 
 gboolean flatpak_has_name_prefix (const char *string,
                                   const char *name);
+gboolean flatpak_name_matches_one_prefix (const char         *string,
+                                          const char * const *prefixes);
+gboolean flatpak_name_matches_one_wildcard_prefix (const char         *string,
+                                                   const char * const *maybe_wildcard_prefixes);
 gboolean flatpak_is_valid_name (const char *string,
                                 GError **error);
 gboolean flatpak_is_valid_branch (const char *string,
@@ -411,6 +415,10 @@ typedef struct
 } FlatpakExtension;
 
 void flatpak_extension_free (FlatpakExtension *extension);
+
+void flatpak_parse_extension_with_tag (const char  *extension,
+                                       char       **name,
+                                       char       **tag);
 
 GList *flatpak_list_extensions (GKeyFile   *metakey,
                                 const char *arch,
