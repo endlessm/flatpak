@@ -7699,10 +7699,11 @@ cached_summary_free (CachedSummary *summary)
 }
 
 static CachedSummary *
-cached_summary_new (GBytes *bytes,
-                    GBytes *bytes_sig,
-                    const char *remote,
-                    const char *url)
+cached_summary_new_with_time (GBytes *bytes,
+                              GBytes *bytes_sig,
+                              const char *remote,
+                              const char *url,
+                              gint64 time)
 {
   CachedSummary *summary = g_new0 (CachedSummary, 1);
   summary->bytes = g_bytes_ref (bytes);
@@ -7714,12 +7715,196 @@ cached_summary_new (GBytes *bytes,
   return summary;
 }
 
+static CachedSummary *
+cached_summary_new (GBytes *bytes,
+                    GBytes *bytes_sig,
+                    const char *remote,
+                    const char *url)
+{
+  return cached_summary_new_with_time (bytes,
+                                       bytes_sig,
+                                       remote,
+                                       url,
+                                       g_get_monotonic_time ());
+}
+
+G_DECLARE_AUTOPTR_CLEANUP_FUNC (CachedSummary, cached_summary_free);
+
+static CachedSummary *
+read_cached_summary_file (GFile         *cached_summary_file,
+                          GCancellable  *cancellable,
+                          GError       **error)
+{
+  gconstpointer summary_bytestring = NULL;
+  g_autoptr(GVariant) maybe_summary_sig_bytestring = NULL;
+  gconstpointer summary_sig_bytestring = NULL;
+  g_autoptr(GBytes) summary_bytes = NULL;
+  g_autoptr(GBytes) summary_sig_bytes = NULL;
+  const char *summary_url = NULL;
+  const char *summary_remote = NULL;
+  gint64 summary_time = 0;
+
+  g_autoptr(GBytes) bytes = g_file_load_bytes (cached_summary_file, cancellable, NULL, error);
+  g_autoptr(GVariant) variant = NULL;
+
+  if (bytes == NULL)
+    return FALSE;
+
+  variant = g_variant_new_from_bytes (G_VARIANT_TYPE ("(aymayssx)"), bytes, TRUE);
+
+  g_variant_get ("(&aymay&s&sx)",
+                 &summary_bytestring,
+                 &maybe_summary_sig_bytestring,
+                 &summary_url,
+                 &summary_remote,
+                 &summary_time);
+  g_variant_get ("m&ay", &summary_sig_bytestring);
+
+  summary_bytes = g_bytes_new (summary_bytestring, strlen (summary_bytestring));
+  summary_sig_bytes =
+    summary_sig_bytestring != NULL ? g_bytes_new (summary_sig_bytestring,
+                                                  g_strlen (summary_sig_bytestring)) :
+                                     NULL;
+
+  return cached_summary_new_with_time (summary_bytes,
+                                       summary_sig_bytes,
+                                       summary_remote,
+                                       summary_url,
+                                       summary_time);
+}
+
+static gboolean
+flatpak_dir_fetch_cached_summary_from_disk (FlatpakDir     *self,
+                                            const char     *name,
+                                            CachedSummary  *existing_entry,
+                                            GCancellable   *cancellable,
+                                            CachedSummary **out_cached_summary_entry,
+                                            GError        **error)
+{
+  g_autoptr(GError) local_error = NULL;
+  g_autoptr(GFile) cache_directory = NULL;
+  g_autofree gchar *cached_summary_filename = NULL;
+  g_autoptr(GFile) cached_summary_file = NULL;
+
+  g_return_val_if_fail (out_cached_summary_entry != NULL, FALSE);
+
+  cache_directory = g_file_get_child (self->basedir, "cache");
+  cached_summary_filename = g_strdup_printf ("%s.cached-summary", name);
+  cached_summary_file = g_file_get_child (self->basedir, cached_summary_filename);
+
+  if (existing_entry != NULL)
+    {
+      GTimeVal tv;
+      /* Check the mtime of the cached summary. If it is newer then
+       * timestamp of the existing entry then load and return it,
+       * otherwise ignore it. */
+      g_autoptr(GFileInfo) info = g_file_query_info (cached_summary_file,
+                                                     G_FILE_ATTRIBUTE_TIME_MODIFIED_USEC,
+                                                     G_FILE_QUERY_INFO_NONE,
+                                                     cancellable,
+                                                     &local_error);
+
+      if (info == NULL)
+        {
+          if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+            {
+              *out_cached_summary_entry = NULL;
+              return TRUE;
+            }
+
+          g_propagate_error (error, g_steal_pointer (&local_error));
+          return FALSE;
+        }
+
+      g_file_info_get_modification_time (info, &tv);
+
+      if (existing_entry->time > tv.tv_usec)
+        {
+          /* No point reading the cached summary file since
+           * it is older than the existing entry. Return now. */
+          *out_cached_summary_entry = NULL;
+          return TRUE;
+        }
+    }
+
+  /* Read the cached summary file */
+  cached_summary = read_cached_summary_file (cached_summary_file,
+                                             cancellable,
+                                             &local_error);
+
+  if (cached_summary == NULL)
+    {
+      if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+        {
+          *out_cached_summary_entry = NULL;
+          return TRUE;
+        }
+
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return FALSE;
+    }
+
+  *out_cached_summary_entry = g_steal_pointer (&cached_summary);
+  return TRUE;
+}
+
+static gboolean
+flatpak_dir_summary_refresh_from_disk (FlatpakDir    *self,
+                                       const char    *name,
+                                       GCancellable  *cancellable,
+                                       GError       **error)
+{
+  g_autoptr(CachedSummary) summary = NULL;
+  g_autoptr(GError) local_error = NULL;
+
+  g_assert (self->summary_cache != NULL);
+
+  /* Take a lock on the repository. Strictly speaking this
+   * is a little broader than what we actually need to take
+   * a lock on, but it has handy properties like preventing
+   * new refs from being pulled into the repo whilst we
+   * are updating the cached summary on disk. Also,
+   * ostree_repo_lock_push will block until the lock is
+   * released, which is nice. */
+  if (!ostree_repo_lock_push (self->repo,
+                              OSTREE_REPO_LOCK_EXCLUSIVE,
+                              cancellable,
+                              error))
+    return FALSE;
+
+  /* Try to load the cached summary from the cache directory,
+   * but don't fail if it isn't there. */
+  if (!flatpak_dir_fetch_cached_summary_from_disk (self,
+                                                   name,
+                                                   g_hash_table_lookup (self->summary_cache,
+                                                                        name),
+                                                   cancellable,
+                                                   &summary,
+                                                   &local_error))
+    {
+      if (!ostree_repo_lock_pop (self->repo, cancellable, error))
+        return FALSE;
+
+      g_propgate_error (error, g_steal_pointer (&local_error));
+      return FALSE;
+    }
+
+  /* Unconditionally replace the summary in the hashtable. We use
+   * the file modification time to determine whether or not to
+   * load it. */
+  g_hash_table_replace (self->summary_cache,
+                        g_strdup (name),
+                        g_steal_pointer (&summary));
+}
+
 static gboolean
 flatpak_dir_lookup_cached_summary (FlatpakDir  *self,
                                    GBytes **bytes_out,
                                    GBytes **bytes_sig_out,
                                    const char  *name,
-                                   const char  *url)
+                                   const char  *url,
+                                   GCancellable  *cancellable,
+                                   GError       **error)
 {
   CachedSummary *summary;
   gboolean res = FALSE;
@@ -7729,7 +7914,9 @@ flatpak_dir_lookup_cached_summary (FlatpakDir  *self,
   if (self->summary_cache == NULL)
     self->summary_cache = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, (GDestroyNotify)cached_summary_free);
 
-  summary = g_hash_table_lookup (self->summary_cache, name);
+  flatpak_dir_summary_refresh_from_disk (self, name);
+
+  summary = g_hash_table_lookup (self->summary_cache, name, cancellable, error);
   if (summary)
     {
       guint64 now = g_get_real_time ();
@@ -7754,12 +7941,92 @@ flatpak_dir_lookup_cached_summary (FlatpakDir  *self,
   return res;
 }
 
-static void
-flatpak_dir_cache_summary (FlatpakDir  *self,
-                           GBytes      *bytes,
-                           GBytes      *bytes_sig,
-                           const char  *name,
-                           const char  *url)
+static char *
+bytes_to_null_terminated_bytestring (GBytes *bytes)
+{
+  gsize length;
+  gconstpointer bytes_data = g_bytes_get_data (bytes, &length);
+  char *nullterminated_data = g_new0 (char, length + 1);
+
+  memcpy (nullterminated_data, bytes_data, sizeof (char) * length);
+  nullterminated_data[length] = '\0';
+
+  return nullterminated_data;
+}
+
+static gboolean
+write_variant_bytes_to_file (GFile         *file,
+                             GVariant      *variant,
+                             GCancellable  *cancellable,
+                             GError       **error)
+{
+  g_autoptr(GBytes) bytes = g_variant_get_data_as_bytes (variant);
+  gsize bytes_length;
+  gconstpointer bytes_data = g_bytes_get_data (bytes, &bytes_length);
+
+  return g_file_replace_contents (file,
+                                  (const char *) bytes_data,
+                                  bytes_length,
+                                  NULL,
+                                  FALSE,
+                                  cancellable,
+                                  error);
+}
+
+static gboolean
+flatpak_dir_summary_write_to_disk (FlatpakDir     *self,
+                                   const char     *name,
+                                   CachedSummary  *summary,
+                                   GCancellable   *cancellable,
+                                   GError        **error)
+{
+  g_autoptr(GFile) cache_directory = g_file_get_child (self->basedir, "cache");
+  g_autofree char *cached_summary_filename = g_strdup_printf ("%s.cached-summary", name);
+  g_autoptr(GFile) cached_summary_file = g_file_get_child (cache_directory,
+                                                           cached_summary_filename);
+  g_autofree char *summary_bytestring = bytes_to_null_terminated_bytestring (summary->bytes);
+  g_autofree char *summary_sig_bytestring =
+    summary->bytes_sig != NULL ? bytes_to_null_terminated_bytestring (summary->bytes_sig) : NULL;
+  g_autoptr(GVariant) summary_variant = NULL;
+
+  g_auto(GVariantBuilder) builder;
+
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("(aymayssx)"));
+
+  /* First ensure that we can write to the cache directory */
+  if (!g_file_make_directory_with_parents (cache_directory, cancellable, error))
+    return FALSE;
+
+  /* Now build up a variant with our cache data */
+  g_variant_builder_open (&builder, G_VARIANT_TYPE ("aymayssx"));
+
+  g_variant_builder_add (&builder, "ay", summary_bytestring);
+  g_variant_builder_add (&builder,
+                         "may",
+                         g_variant_new_maybe (G_VARIANT_TYPE_BYTESTRING,
+                                              summary_sig_bytestring));
+  g_variant_builder_add (&builder, "s", summary->remote);
+  g_variant_builder_add (&builder, "s", summary->url);
+  g_variant_builder_add (&builder, "x", summary->time);
+
+  g_variant_builder_close (&builder);
+
+  summary_variant = g_variant_builder_end (&builder);
+
+  return write_variant_bytes_to_file (cached_summary_file,
+                                      summary_variant,
+                                      cancellable,
+                                      error);
+}
+
+static gboolean
+flatpak_dir_cache_summary (FlatpakDir    *self,
+                           GBytes        *bytes,
+                           GBytes        *bytes_sig,
+                           const char    *name,
+                           const char    *url,
+                           GCancellable  *cancellable,
+                           GError       **error)
 {
   CachedSummary *summary;
 
@@ -7773,9 +8040,19 @@ flatpak_dir_cache_summary (FlatpakDir  *self,
   g_assert (self->summary_cache != NULL);
 
   summary = cached_summary_new (bytes, bytes_sig, name, url);
-  g_hash_table_replace (self->summary_cache, summary->remote, summary);
+  if (!g_hash_table_replace (self->summary_cache, summary->remote, summary))
+    {
+      /* Write the cached summary to disk if we inserted a new summary */
+      if (!flatpak_dir_summary_write_to_disk (self,
+                                              summary,
+                                              name,
+                                              cancellable,
+                                              error))
+        return FALSE;
+    }
 
   G_UNLOCK (cache);
+  return TRUE;
 }
 
 static gboolean
