@@ -2839,11 +2839,12 @@ gboolean
 flatpak_cache_lookup_ref (GVariant    *xa_cache,
                           const char  *ref)
 {
+  int pos;
   g_autoptr(GVariant) refs = NULL;
 
   refs = g_variant_get_child_value (xa_cache, 0);
 
-  return flatpak_variant_bsearch_str (refs, ref, NULL);
+  return flatpak_variant_bsearch_str (refs, ref, &pos);
 }
 
 gboolean
