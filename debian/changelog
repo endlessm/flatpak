@@ -1,6 +1,5 @@
 flatpak (0.11.3-3endless0) unstable; urgency=medium
   * New upstream releases
-  * Rebase the eight Endless patches
   * Import packaging changes from Debian
     - Stay on Python 2 because we're not carrying Debian's patch
 
