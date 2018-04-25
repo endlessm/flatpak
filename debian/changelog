@@ -3,6 +3,7 @@ flatpak (0.11.3-3endless1) unstable; urgency=medium
   * Import packaging changes from Debian
     - Stay on Python 2 because we're not carrying Debian's patch
     - Add flatpak-portal and flatpak-portal.service to d/flatpak.install
+    - Update d/libflatpak0.symbols
 
  -- Matthew Leeds <matthew.leeds@endlessm.com>  Mon, 23 Apr 2018 21:30:00 +0000
 
