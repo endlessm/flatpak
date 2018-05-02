@@ -1,3 +1,17 @@
+flatpak (0.11.6-1endless1) unstable; urgency=medium
+
+  * New upstream release
+  * Import packaging changes from Debian
+
+ -- Matthew Leeds <matthew.leeds@endlessm.com>  Wed, 02 May 2018 18:42:00 +0100
+
+flatpak (0.11.6-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+  * Drop patches added in previous version, both merged upstream
+
+ -- Simon McVittie <smcv@debian.org>  Wed, 02 May 2018 18:09:34 +0100
+
 flatpak (0.11.5-1endless1) unstable; urgency=medium
   * New upstream releases
   * Import packaging changes from Debian
