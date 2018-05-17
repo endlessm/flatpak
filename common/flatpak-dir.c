@@ -235,28 +235,39 @@ flatpak_remote_state_ensure_metadata (FlatpakRemoteState *self,
   return TRUE;
 }
 
-
-char *
+/* Returns TRUE if the ref is found in the summary or cache. out_checksum and
+ * out_variant are not guaranteed to be set even when the ref is found. */
+gboolean
 flatpak_remote_state_lookup_ref (FlatpakRemoteState *self,
                                  const char         *ref,
+                                 char              **out_checksum,
                                  GVariant          **out_variant,
                                  GError            **error)
 {
-  g_autofree char *latest_rev = NULL;
-
-  if (!flatpak_remote_state_ensure_summary (self, error))
-    return NULL;
-
-  if (!flatpak_summary_lookup_ref (self->summary, self->collection_id, ref, &latest_rev, out_variant))
+  if (self->collection_id == NULL || self->summary != NULL)
     {
-      if (self->collection_id != NULL)
-        flatpak_fail (error, "No such ref (%s, %s) in remote %s", self->collection_id, ref, self->remote_name);
-      else
-        flatpak_fail (error, "No such ref '%s' in remote %s", ref, self->remote_name);
-      return NULL;
+      if (!flatpak_remote_state_ensure_summary (self, error))
+        return FALSE;
+
+      if (!flatpak_summary_lookup_ref (self->summary, self->collection_id, ref, out_checksum, out_variant))
+        {
+          if (self->collection_id != NULL)
+            flatpak_fail (error, "No such ref (%s, %s) in remote %s", self->collection_id, ref, self->remote_name);
+          else
+            flatpak_fail (error, "No such ref '%s' in remote %s", ref, self->remote_name);
+          return FALSE;
+        }
+    }
+  else
+    {
+      if (!flatpak_remote_state_ensure_metadata (self, error))
+        return FALSE;
+
+      if (!flatpak_remote_state_lookup_cache (self, ref, NULL, NULL, NULL, error))
+        return FALSE;
     }
 
-  return g_steal_pointer (&latest_rev);
+  return TRUE;
 }
 
 char **
@@ -2383,9 +2394,14 @@ flatpak_dir_find_latest_rev (FlatpakDir               *self,
     }
   else
     {
-      latest_rev = flatpak_remote_state_lookup_ref (state, ref, NULL, error);
+      flatpak_remote_state_lookup_ref (state, ref, &latest_rev, NULL, error);
       if (latest_rev == NULL)
-        return FALSE;
+        {
+          if (error != NULL && *error == NULL)
+            flatpak_fail (error, "Couldn't find latest checksum for ref %s in remote %s",
+                          ref, state->remote_name);
+          return FALSE;
+        }
 
       if (out_rev != NULL)
         *out_rev = g_steal_pointer (&latest_rev);
@@ -3308,9 +3324,14 @@ flatpak_dir_mirror_oci (FlatpakDir          *self,
     return FALSE;
 
   /* We use the summary so that we can reuse any cached json */
-  latest_rev = flatpak_remote_state_lookup_ref (state, ref, &summary_element, error);
+  flatpak_remote_state_lookup_ref (state, ref, &latest_rev, &summary_element, error);
   if (latest_rev == NULL)
-    return FALSE;
+    {
+      if (error != NULL && *error == NULL)
+        flatpak_fail (error, "Couldn't find latest checksum for ref %s in remote %s",
+                      ref, state->remote_name);
+      return FALSE;
+    }
 
   if (skip_if_current_is != NULL && strcmp (latest_rev, skip_if_current_is) == 0)
     {
@@ -3395,10 +3416,14 @@ flatpak_dir_pull_oci (FlatpakDir          *self,
     return FALSE;
 
   /* We use the summary so that we can reuse any cached json */
-  latest_rev =
-    flatpak_remote_state_lookup_ref (state, ref, &summary_element, error);
+  flatpak_remote_state_lookup_ref (state, ref, &latest_rev, &summary_element, error);
   if (latest_rev == NULL)
-    return FALSE;
+    {
+      if (error != NULL && *error == NULL)
+        flatpak_fail (error, "Couldn't find latest checksum for ref %s in remote %s",
+                      ref, state->remote_name);
+      return FALSE;
+    }
 
   metadata = g_variant_get_child_value (summary_element, 2);
   g_variant_lookup (metadata, "xa.oci-repository", "s", &oci_repository);
@@ -3603,7 +3628,11 @@ flatpak_dir_pull (FlatpakDir          *self,
       else
 #endif  /* FLATPAK_ENABLE_P2P */
         {
-          rev = flatpak_remote_state_lookup_ref (state, ref, NULL, error);
+          flatpak_remote_state_lookup_ref (state, ref, &rev, NULL, error);
+          if (rev == NULL && error != NULL && *error == NULL)
+            flatpak_fail (error, "Couldn't find latest checksum for ref %s in remote %s",
+                          ref, state->remote_name);
+
           results = NULL;
         }
 
@@ -6749,6 +6778,59 @@ flatpak_dir_ensure_bundle_remote (FlatpakDir          *self,
   return g_steal_pointer (&remote);
 }
 
+/* If core.add-remotes-config-dir is set for this repository (which is
+ * not a common configuration, but it is possible), we will fail to modify
+ * remote configuration when using a combination of
+ * ostree_repo_remote_[add|change]() and ostree_repo_write_config() due to
+ * adding remote config in /etc/flatpak/remotes.d and also in
+ * /ostree/repo/config. Avoid that.
+ *
+ * FIXME: See https://github.com/flatpak/flatpak/issues/1665. In future, we
+ * should just write the remote config to the correct place, factoring
+ * core.add-remotes-config-dir in. */
+static gboolean
+flatpak_dir_check_add_remotes_config_dir (FlatpakDir  *self,
+                                          GError     **error)
+{
+  g_autoptr(GError) local_error = NULL;
+  gboolean val;
+  GKeyFile *config;
+
+  if (!flatpak_dir_maybe_ensure_repo (self, NULL, error))
+    return FALSE;
+
+  if (self->repo == NULL)
+    return TRUE;
+
+  config = ostree_repo_get_config (self->repo);
+
+  if (config == NULL)
+    return TRUE;
+
+  val = g_key_file_get_boolean (config, "core", "add-remotes-config-dir", &local_error);
+
+  if (local_error != NULL)
+    {
+      if (g_error_matches (local_error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_KEY_NOT_FOUND))
+        {
+          g_clear_error (&local_error);
+          val = ostree_repo_is_system (self->repo);
+        }
+      else
+        {
+          g_propagate_error (error, g_steal_pointer (&local_error));
+          return FALSE;
+        }
+    }
+
+  if (!val)
+    return TRUE;
+
+  return flatpak_fail (error,
+                       "Can’t update remote configuration on a repository with "
+                       "core.add-remotes-config-dir=true");
+}
+
 gboolean
 flatpak_dir_install_bundle (FlatpakDir          *self,
                             GFile               *file,
@@ -6764,6 +6846,9 @@ flatpak_dir_install_bundle (FlatpakDir          *self,
   g_auto(GStrv) parts = NULL;
   g_autofree char *to_checksum = NULL;
   gboolean gpg_verify;
+
+  if (!flatpak_dir_check_add_remotes_config_dir (self, error))
+    return FALSE;
 
   if (flatpak_dir_use_system_helper (self, NULL))
     {
@@ -6844,7 +6929,6 @@ flatpak_dir_install_bundle (FlatpakDir          *self,
 
       /* The pull succeeded, and this is an update. So, we need to update the repo config
          if anything changed */
-
       ostree_repo_remote_get_url (self->repo,
                                   remote,
                                   &old_url,
@@ -8389,17 +8473,15 @@ flatpak_dir_remote_has_ref (FlatpakDir   *self,
 {
   g_autoptr(GError) local_error = NULL;
   g_autoptr(FlatpakRemoteState) state = NULL;
-  g_autofree char *rev = NULL;
 
-  state = flatpak_dir_get_remote_state (self, remote, NULL, &local_error);
+  state = flatpak_dir_get_remote_state_optional (self, remote, NULL, &local_error);
   if (state == NULL)
     {
       g_debug ("Can't get state for remote %s: %s", remote, local_error->message);
       return FALSE;
     }
 
-  rev = flatpak_remote_state_lookup_ref (state, ref, NULL, NULL);
-  return rev != NULL;
+  return flatpak_remote_state_lookup_ref (state, ref, NULL, NULL, NULL);
 }
 
 static void
@@ -8454,13 +8536,49 @@ flatpak_dir_remote_list_refs (FlatpakDir         *self,
   const gchar *collection_id;
   GVariantIter iter;
 
-  if (!flatpak_remote_state_ensure_summary (state, error))
-    return FALSE;
-
   ret_all_refs = g_hash_table_new_full (flatpak_collection_ref_hash,
                                         flatpak_collection_ref_equal,
                                         (GDestroyNotify) flatpak_collection_ref_free,
                                         g_free);
+
+  /* If the remote has P2P enabled and we're offline, get the refs list from
+   * xa.cache in ostree-metadata (although it's inferior to the summary refs
+   * list in that it lacks checksums). */
+  if (state->collection_id != NULL && state->summary == NULL)
+    {
+      g_autoptr(GVariant) xa_cache = NULL;
+      g_autoptr(GVariant) cache = NULL;
+      gsize i, n;
+
+      if (!flatpak_remote_state_ensure_metadata (state, error))
+        return FALSE;
+
+      if (!flatpak_remote_state_lookup_repo_metadata (state, "xa.cache", "@*", &xa_cache))
+        return flatpak_fail (error, _("No summary or Flatpak cache available for remote %s"),
+                             state->remote_name);
+
+      cache = g_variant_get_child_value (xa_cache, 0);
+      n = g_variant_n_children (cache);
+      for (i = 0; i < n; i++)
+        {
+          g_autoptr(GVariant) child = NULL;
+          g_autoptr(GVariant) cur_v = NULL;
+          g_autoptr(FlatpakCollectionRef) coll_ref = NULL;
+          const char *ref;
+
+          child = g_variant_get_child_value (cache, i);
+          cur_v = g_variant_get_child_value (child, 0);
+          ref = g_variant_get_string (cur_v, NULL);
+          coll_ref = flatpak_collection_ref_new (state->collection_id, ref);
+
+          g_hash_table_insert (ret_all_refs, g_steal_pointer (&coll_ref), NULL);
+        }
+
+      goto out;
+    }
+
+  if (!flatpak_remote_state_ensure_summary (state, error))
+    return FALSE;
 
   /* refs that match the main collection-id */
   ref_map = g_variant_get_child_value (state->summary, 0);
@@ -8483,6 +8601,7 @@ flatpak_dir_remote_list_refs (FlatpakDir         *self,
     }
 
 
+out:
   *out_all_refs = g_steal_pointer (&ret_all_refs);
 
   return TRUE;
@@ -8682,7 +8801,7 @@ flatpak_dir_find_remote_refs (FlatpakDir   *self,
   g_autoptr(FlatpakRemoteState) state = NULL;
   GPtrArray *matched_refs;
 
-  state = flatpak_dir_get_remote_state (self, remote, cancellable, error);
+  state = flatpak_dir_get_remote_state_optional (self, remote, cancellable, error);
   if (state == NULL)
     return NULL;
 
@@ -8779,13 +8898,8 @@ flatpak_dir_find_remote_ref (FlatpakDir   *self,
   g_autoptr(FlatpakRemoteState) state = NULL;
   g_autoptr(GError) my_error = NULL;
 
-  /* Atm this has to be optional, because otherwise we fail test-unsigned-summaries.sh due
-   * to the install failing with a wrong-gpg error, rather than silently ignoring this */
   state = flatpak_dir_get_remote_state_optional (self, remote, cancellable, error);
   if (state == NULL)
-    return NULL;
-
-  if (!flatpak_remote_state_ensure_summary (state, error))
     return NULL;
 
   if (!flatpak_dir_remote_list_refs (self, state,
@@ -10079,6 +10193,8 @@ flatpak_dir_modify_remote (FlatpakDir   *self,
     return flatpak_fail (error, "No configuration for remote %s specified",
                          remote_name);
 
+  if (!flatpak_dir_check_add_remotes_config_dir (self, error))
+    return FALSE;
 
   if (flatpak_dir_use_system_helper (self, NULL))
     {
@@ -10660,9 +10776,16 @@ flatpak_dir_fetch_remote_commit (FlatpakDir   *self,
       state = flatpak_dir_get_remote_state (self, remote_name, cancellable, error);
       if (state == NULL)
         return NULL;
-      latest_commit = flatpak_remote_state_lookup_ref (state, ref, NULL, error);
+
+      flatpak_remote_state_lookup_ref (state, ref, &latest_commit, NULL, error);
       if (latest_commit == NULL)
-        return NULL;
+        {
+          if (error != NULL && *error == NULL)
+            flatpak_fail (error, "Couldn't find latest checksum for ref %s in remote %s",
+                          ref, state->remote_name);
+          return NULL;
+        }
+
       opt_commit = latest_commit;
     }
 
@@ -10880,8 +11003,7 @@ flatpak_dir_find_remote_related (FlatpakDir *self,
 
               extension_ref = g_build_filename ("runtime", extension, parts[2], branch, NULL);
 
-              checksum = flatpak_remote_state_lookup_ref (state, extension_ref, NULL, NULL);
-              if (checksum)
+              if (flatpak_remote_state_lookup_ref (state, extension_ref, &checksum, NULL, NULL))
                 {
                   add_related (self, related, extension, extension_collection_id, extension_ref, checksum,
                                no_autodownload, download_if, autodelete, locale_subset);
@@ -10892,8 +11014,9 @@ flatpak_dir_find_remote_related (FlatpakDir *self,
                   int j;
                   for (j = 0; refs[j] != NULL; j++)
                     {
-                      g_autofree char *subref_checksum = flatpak_remote_state_lookup_ref (state, refs[j], NULL, NULL);
-                      if (subref_checksum)
+                      g_autofree char *subref_checksum = NULL;
+
+                      if (flatpak_remote_state_lookup_ref (state, refs[j], &subref_checksum, NULL, NULL))
                         add_related (self, related, extension, extension_collection_id, refs[j], subref_checksum,
                                      no_autodownload, download_if, autodelete, locale_subset);
                     }
