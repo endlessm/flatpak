@@ -4080,21 +4080,28 @@ _flatpak_dir_ensure_repo (FlatpakDir   *self,
 
   /* Earlier flatpak used to reset min-free-space-percent to 0 every time, but now we
    * favor min-free-space-size instead of it (See below).
-   */
+   *
+   * Similarly (Endless only), ensure core.add-remotes-config-dir defaults
+   * to false, otherwise we can end up writing partially valid config files
+   * to two locations. See https://phabricator.endlessm.com/T22258.
+   * These changes should not be upstreamed. */
   if (!flatpak_dir_use_system_helper (self, NULL))
     {
       GKeyFile *orig_config = NULL;
       g_autoptr(GKeyFile) new_config = NULL;
       g_autofree char *orig_min_free_space_percent = NULL;
       g_autofree char *orig_min_free_space_size = NULL;
+      g_autofree char *orig_add_remotes_config_dir = NULL;
       const char *min_free_space_size = "500MB";
       guint64 min_free_space_percent_int;
 
       orig_config = ostree_repo_get_config (repo);
       orig_min_free_space_percent = g_key_file_get_value (orig_config, "core", "min-free-space-percent", NULL);
       orig_min_free_space_size = g_key_file_get_value (orig_config, "core", "min-free-space-size", NULL);
+      orig_add_remotes_config_dir = g_key_file_get_value (orig_config, "core", "add-remotes-config-dir", NULL);
 
-      if (orig_min_free_space_size == NULL)
+      if (orig_min_free_space_size == NULL ||
+          orig_add_remotes_config_dir == NULL)
         new_config = ostree_repo_copy_config (repo);
 
       /* Scrap previously written min-free-space-percent=0 and replace it with min-free-space-size */
@@ -4119,6 +4126,9 @@ _flatpak_dir_ensure_repo (FlatpakDir   *self,
       if (orig_min_free_space_size == NULL &&
           orig_min_free_space_percent == NULL)
         g_key_file_set_string (new_config, "core", "min-free-space-size", min_free_space_size);
+
+      if (orig_add_remotes_config_dir == NULL)
+        g_key_file_set_boolean (new_config, "core", "add-remotes-config-dir", FALSE);
 
       if (new_config != NULL)
         {
