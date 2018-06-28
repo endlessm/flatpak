@@ -1958,8 +1958,8 @@ _flatpak_dir_ensure_repo (FlatpakDir   *self,
             }
         }
 
-      /* Reset min-free-space-percent to 0, this keeps being a problem for a lot
-       * of people.
+      /* Earlier flatpak used to reset min-free-space-percent to 0 everytime, but now we
+       * favor min-free-space-size  instead of it (See below).
        *
        * Similarly (Endless only), ensure core.add-remotes-config-dir defaults
        * to false, otherwise we can end up writing partially valid config files
@@ -1970,18 +1970,42 @@ _flatpak_dir_ensure_repo (FlatpakDir   *self,
           GKeyFile *orig_config = NULL;
           g_autoptr(GKeyFile) new_config = NULL;
           g_autofree char *orig_min_free_space_percent = NULL;
+          g_autofree char *orig_min_free_space_size = NULL;
           g_autofree char *orig_add_remotes_config_dir = NULL;
+          const char *min_free_space_size = "500MB";
+          guint64 min_free_space_percent_int;
 
           orig_config = ostree_repo_get_config (repo);
           orig_min_free_space_percent = g_key_file_get_value (orig_config, "core", "min-free-space-percent", NULL);
+          orig_min_free_space_size = g_key_file_get_value (orig_config, "core", "min-free-space-size", NULL);
           orig_add_remotes_config_dir = g_key_file_get_value (orig_config, "core", "add-remotes-config-dir", NULL);
 
-          if (orig_min_free_space_percent == NULL ||
+          if (orig_min_free_space_size == NULL ||
+              orig_min_free_space_percent != NULL ||
               orig_add_remotes_config_dir == NULL)
             new_config = ostree_repo_copy_config (repo);
 
-          if (orig_min_free_space_percent == NULL)
-            g_key_file_set_string (new_config, "core", "min-free-space-percent", "0");
+          /* Scrap previously written min-free-space-percent=0 and replace it with min-free-space-size */
+          if (orig_min_free_space_percent != NULL &&
+              g_ascii_string_to_unsigned (orig_min_free_space_percent, 10,
+                                          0, G_MAXUINT64,
+                                          &min_free_space_percent_int, &my_error))
+            {
+              if (min_free_space_percent_int == 0)
+                {
+                  g_key_file_remove_key (new_config, "core", "min-free-space-percent", NULL);
+                  g_key_file_set_string (new_config, "core", "min-free-space-size", min_free_space_size);
+                }
+            }
+          else if (my_error != NULL)
+            {
+                g_propagate_error (error, g_steal_pointer (&my_error));
+                return FALSE;
+            }
+
+          if (orig_min_free_space_size == NULL &&
+              orig_min_free_space_percent == NULL)
+            g_key_file_set_string (new_config, "core", "min-free-space-size", min_free_space_size);
 
           if (orig_add_remotes_config_dir == NULL)
             g_key_file_set_boolean (new_config, "core", "add-remotes-config-dir", FALSE);
