@@ -1958,20 +1958,37 @@ _flatpak_dir_ensure_repo (FlatpakDir   *self,
             }
         }
 
-      /* Reset min-free-space-percent to 0, this keeps being a problem for a lot of people */
+      /* Reset min-free-space-percent to 0, this keeps being a problem for a lot
+       * of people.
+       *
+       * Similarly (Endless only), ensure core.add-remotes-config-dir defaults
+       * to false, otherwise we can end up writing partially valid config files
+       * to two locations. See https://phabricator.endlessm.com/T22258.
+       * These changes should not be upstreamed. */
       if (!use_helper)
         {
           GKeyFile *orig_config = NULL;
+          g_autoptr(GKeyFile) new_config = NULL;
           g_autofree char *orig_min_free_space_percent = NULL;
+          g_autofree char *orig_add_remotes_config_dir = NULL;
 
           orig_config = ostree_repo_get_config (repo);
           orig_min_free_space_percent = g_key_file_get_value (orig_config, "core", "min-free-space-percent", NULL);
-          if (orig_min_free_space_percent == NULL)
-            {
-              GKeyFile *config = ostree_repo_copy_config (repo);
+          orig_add_remotes_config_dir = g_key_file_get_value (orig_config, "core", "add-remotes-config-dir", NULL);
 
-              g_key_file_set_string (config, "core", "min-free-space-percent", "0");
-              if (!ostree_repo_write_config (repo, config, error))
+          if (orig_min_free_space_percent == NULL ||
+              orig_add_remotes_config_dir == NULL)
+            new_config = ostree_repo_copy_config (repo);
+
+          if (orig_min_free_space_percent == NULL)
+            g_key_file_set_string (new_config, "core", "min-free-space-percent", "0");
+
+          if (orig_add_remotes_config_dir == NULL)
+            g_key_file_set_boolean (new_config, "core", "add-remotes-config-dir", FALSE);
+
+          if (new_config != NULL)
+            {
+              if (!ostree_repo_write_config (repo, new_config, error))
                 return FALSE;
 
               if (!ostree_repo_reload_config (repo, cancellable, error))
