@@ -6453,6 +6453,7 @@ flatpak_dir_create_system_child_repo (FlatpakDir   *self,
   const char *mode_env = g_getenv ("FLATPAK_OSTREE_REPO_MODE");
   GKeyFile *orig_config = NULL;
   g_autofree char *orig_min_free_space_percent = NULL;
+  g_autofree char *orig_min_free_space_size = NULL;
 
   g_assert (!self->user);
 
@@ -6530,6 +6531,11 @@ flatpak_dir_create_system_child_repo (FlatpakDir   *self,
   orig_min_free_space_percent = g_key_file_get_value (orig_config, "core", "min-free-space-percent", NULL);
   if (orig_min_free_space_percent)
     g_key_file_set_value (config, "core", "min-free-space-percent", orig_min_free_space_percent);
+
+  /* Copy the min space size value so it affects the temporary repo too */
+  orig_min_free_space_size = g_key_file_get_value (orig_config, "core", "min-free-space-size", NULL);
+  if (orig_min_free_space_size)
+    g_key_file_set_value (config, "core", "min-free-space-size", orig_min_free_space_size);
 
   if (!ostree_repo_write_config (new_repo, config, error))
     return NULL;
