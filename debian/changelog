@@ -187,6 +187,25 @@ flatpak (1.0.0-1) unstable; urgency=medium
 
  -- Simon McVittie <smcv@debian.org>  Mon, 20 Aug 2018 21:29:02 +0100
 
+flatpak (0.99.3-1endless1) unstable; urgency=medium
+
+  * New upstream release
+  * Rebase onto Debian's packaging from git
+    - Merge our entries into this changelog
+    - Use Debian's patch which changes the package requirement from
+      Python 2 to 3
+    - Drop our patch to add flatpak_portal_error_quark to the symbol
+      table which is now upstream
+    - Drop our entry of flatpak_installation_list_remotes_by_type in the
+      symbols file in favor of the upstream one
+    - d/rules: Drop our patch to remove --disable-document-portal which
+      is now upstream
+    - d/rules: Drop our patch to add --enable-p2p which is now the
+      default
+    - d/rules: Keep our patch to use --with-external-install-dir
+
+ -- Matthew Leeds <matthew.leeds@endlessm.com>  Fri, 20 Jul 2018 13:37:00 -0700
+
 flatpak (0.99.3-1) unstable; urgency=medium
 
   * New upstream release
