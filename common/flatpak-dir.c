@@ -2219,12 +2219,12 @@ _flatpak_dir_ensure_repo (FlatpakDir   *self,
       orig_add_remotes_config_dir = g_key_file_get_value (orig_config, "core", "add-remotes-config-dir", NULL);
 
       if (orig_min_free_space_size == NULL ||
-          orig_min_free_space_percent != NULL ||
           orig_add_remotes_config_dir == NULL)
         new_config = ostree_repo_copy_config (repo);
 
       /* Scrap previously written min-free-space-percent=0 and replace it with min-free-space-size */
-      if (orig_min_free_space_percent != NULL &&
+      if (orig_min_free_space_size == NULL &&
+          orig_min_free_space_percent != NULL &&
           g_ascii_string_to_unsigned (orig_min_free_space_percent, 10,
                                       0, G_MAXUINT64,
                                       &min_free_space_percent_int, &my_error))
