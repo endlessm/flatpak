@@ -2166,6 +2166,25 @@ flatpak_deploy_data_get_eol_rebase (GVariant *deploy_data)
   return flatpak_deploy_data_get_string (deploy_data, "eolr");
 }
 
+const char **
+flatpak_deploy_data_get_previous_ids (GVariant *deploy_data, gsize *length)
+{
+  g_autoptr(GVariant) metadata = g_variant_get_child_value (deploy_data, 4);
+  g_autoptr(GVariant) previous_ids_v = NULL;
+  const char **previous_ids = NULL;
+
+  previous_ids_v = g_variant_lookup_value (metadata, "previous-ids", NULL);
+  if (previous_ids_v)
+    previous_ids = g_variant_get_strv (previous_ids_v, length);
+  else
+    {
+      if (length != NULL)
+        *length = 0;
+    }
+
+  return previous_ids;
+}
+
 const char *
 flatpak_deploy_data_get_runtime (GVariant *deploy_data)
 {
@@ -2307,7 +2326,8 @@ flatpak_dir_new_deploy_data (FlatpakDir *self,
                              const char *origin,
                              const char *commit,
                              char      **subpaths,
-                             guint64     installed_size)
+                             guint64     installed_size,
+                             GVariant   *old_deploy_data)
 {
   char *empty_subpaths[] = {NULL};
   GVariantBuilder metadata_builder;
@@ -2339,6 +2359,14 @@ flatpak_dir_new_deploy_data (FlatpakDir *self,
   if (application_runtime)
     g_variant_builder_add (&metadata_builder, "{s@v}", "runtime",
                            g_variant_new_variant (g_variant_new_string (application_runtime)));
+
+  if (old_deploy_data)
+    {
+      g_autofree const char **previous_ids = flatpak_deploy_data_get_previous_ids (old_deploy_data, NULL);
+      if (previous_ids)
+        g_variant_builder_add (&metadata_builder, "{s@v}", "previous-ids",
+                               g_variant_new_variant (g_variant_new_strv ((const char * const *) previous_ids, -1)));
+    }
 
   add_appdata_to_deploy_data (&metadata_builder, deploy_dir, id);
 
@@ -7305,7 +7333,8 @@ flatpak_dir_deploy (FlatpakDir          *self,
                                              origin,
                                              checksum,
                                              (char **) subpaths,
-                                             installed_size);
+                                             installed_size,
+                                             old_deploy_data);
 
   deploy_data_file = g_file_get_child (checkoutdir, "deploy");
   if (!flatpak_variant_save (deploy_data_file, deploy_data, cancellable, error))

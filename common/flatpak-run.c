@@ -3190,7 +3190,45 @@ flatpak_run_app (const char     *app_ref,
 
   if (app_deploy != NULL)
     {
+      g_autofree const char **previous_ids = NULL;
+      gsize len = 0;
+
       app_files = flatpak_deploy_get_files (app_deploy);
+
+      g_autoptr (GFile) current_data_dir = flatpak_get_data_dir (app_ref_parts[1]);
+      previous_ids = flatpak_deploy_data_get_previous_ids (app_deploy_data, &len);
+      while (len > 0)
+        {
+          g_autoptr (GFile) previous_data_dir = NULL;
+          g_autoptr (GError) local_error = NULL;
+          g_autofree char *previous_data_path = NULL;
+          g_autofree char *current_data_path = NULL;
+
+          if (g_file_query_exists (current_data_dir, cancellable))
+            break;
+
+          previous_data_dir = flatpak_get_data_dir (previous_ids[--len]);
+          if (!g_file_query_exists (previous_data_dir, cancellable))
+            continue;
+
+          if (!flatpak_file_rename (previous_data_dir,
+                                    current_data_dir,
+                                    cancellable, &local_error))
+             {
+               g_propagate_error (error, g_steal_pointer (&local_error));
+               return FALSE;
+             }
+
+           current_data_path = g_file_get_path (current_data_dir);
+           previous_data_path = g_file_get_path (previous_data_dir);
+           if (symlink (current_data_path, previous_data_path) == 0)
+             break;
+           else
+             {
+               glnx_set_error_from_errno (error);
+               return FALSE;
+             }
+        }
 
       real_app_id_dir = flatpak_ensure_data_dir (app_ref_parts[1], cancellable, error);
       if (real_app_id_dir == NULL)
