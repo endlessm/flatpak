@@ -187,6 +187,12 @@ flatpak (1.0.0-1) unstable; urgency=medium
 
  -- Simon McVittie <smcv@debian.org>  Mon, 20 Aug 2018 21:29:02 +0100
 
+flatpak (1.0.0-0endless1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Matthew Leeds <matthew.leeds@endlessm.com>  Mon, 20 Aug 2018 08:34:00 -0700
+
 flatpak (0.99.3-1endless1) unstable; urgency=medium
 
   * New upstream release
