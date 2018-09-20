@@ -233,6 +233,9 @@ const char *        flatpak_deploy_data_get_alt_id (GVariant *deploy_data);
 const char *        flatpak_deploy_data_get_eol (GVariant *deploy_data);
 const char *        flatpak_deploy_data_get_eol_rebase (GVariant *deploy_data);
 const char *        flatpak_deploy_data_get_runtime (GVariant *deploy_data);
+const char **       flatpak_deploy_data_get_previous_ids (GVariant *deploy_data,
+                                                          gsize    *length);
+
 
 GFile *        flatpak_deploy_get_dir (FlatpakDeploy *deploy);
 GVariant *     flatpak_load_deploy_data (GFile        *deploy_dir,
