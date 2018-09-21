@@ -11524,6 +11524,7 @@ flatpak_dir_update_remote_configuration_for_state (FlatpakDir         *self,
     "xa.gpg-keys",
     "xa.redirect-url",
     "xa.collection-id",
+    "eos.collection-id", /* Endless specific and temporary */
     NULL
   };
 
@@ -11566,7 +11567,7 @@ flatpak_dir_update_remote_configuration_for_state (FlatpakDir         *self,
                     {
                       if (strcmp (key, "xa.redirect-url") == 0)
                         g_ptr_array_add (updated_params, g_strdup ("url"));
-                      else if (strcmp (key, "xa.collection-id") == 0)
+                      else if (strcmp (key, "xa.collection-id") == 0 || strcmp (key, "eos.collection-id") == 0)
                         g_ptr_array_add (updated_params, g_strdup ("collection-id"));
                       else
                         g_ptr_array_add (updated_params, g_strdup (key));
