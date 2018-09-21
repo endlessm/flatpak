@@ -2993,9 +2993,14 @@ flatpak_run_app (const char     *app_ref,
              }
 
            current_data_path = g_file_get_path (current_data_dir);
-           previous_data_path = g_file_get_path (previous_data_dir);
+           previous_data_path = g_file_get_relative_path (previous_data_dir, current_data_dir);
            if (symlink (current_data_path, previous_data_path) == 0)
-             break;
+             {
+               flatpak_bwrap_add_args (bwrap,
+                                       "--symlink", current_data_path, previous_data_path,
+                                       NULL);
+               break;
+             }
            else
              {
                glnx_set_error_from_errno (error);
