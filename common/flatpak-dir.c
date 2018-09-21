@@ -2327,7 +2327,7 @@ flatpak_dir_new_deploy_data (FlatpakDir *self,
                              const char *commit,
                              char      **subpaths,
                              guint64     installed_size,
-                             GVariant   *old_deploy_data)
+                             char      **previous_ids)
 {
   char *empty_subpaths[] = {NULL};
   GVariantBuilder metadata_builder;
@@ -2360,13 +2360,9 @@ flatpak_dir_new_deploy_data (FlatpakDir *self,
     g_variant_builder_add (&metadata_builder, "{s@v}", "runtime",
                            g_variant_new_variant (g_variant_new_string (application_runtime)));
 
-  if (old_deploy_data)
-    {
-      g_autofree const char **previous_ids = flatpak_deploy_data_get_previous_ids (old_deploy_data, NULL);
-      if (previous_ids)
-        g_variant_builder_add (&metadata_builder, "{s@v}", "previous-ids",
-                               g_variant_new_variant (g_variant_new_strv ((const char * const *) previous_ids, -1)));
-    }
+  if (previous_ids)
+    g_variant_builder_add (&metadata_builder, "{s@v}", "previous-ids",
+                           g_variant_new_variant (g_variant_new_strv ((const char * const *) previous_ids, -1)));
 
   add_appdata_to_deploy_data (&metadata_builder, deploy_dir, id);
 
@@ -6026,16 +6022,17 @@ format_flatpak_run_args_from_run_opts (GStrv flatpak_run_args)
 }
 
 static gboolean
-export_desktop_file (const char   *app,
-                     const char   *branch,
-                     const char   *arch,
-                     GKeyFile     *metadata,
-                     int           parent_fd,
-                     const char   *name,
-                     struct stat  *stat_buf,
-                     char        **target,
-                     GCancellable *cancellable,
-                     GError      **error)
+export_desktop_file (const char         *app,
+                     const char         *branch,
+                     const char         *arch,
+                     GKeyFile           *metadata,
+                     const char * const *previous_ids,
+                     int                 parent_fd,
+                     const char         *name,
+                     struct stat        *stat_buf,
+                     char              **target,
+                     GCancellable       *cancellable,
+                     GError            **error)
 {
   gboolean ret = FALSE;
   glnx_autofd int desktop_fd = -1;
@@ -6099,6 +6096,68 @@ export_desktop_file (const char   *app,
 
       /* Add a marker so consumers can easily find out that this launches a sandbox */
       g_key_file_set_string (keyfile, G_KEY_FILE_DESKTOP_GROUP, "X-Flatpak", app);
+
+      /* If the app has been renamed, add its old .desktop filename to
+       * X-Flatpak-RenamedFrom in the new .desktop file, taking care not to
+       * introduce duplicates.
+       */
+      if (previous_ids != NULL)
+        {
+          const char *X_FLATPAK_RENAMED_FROM = "X-Flatpak-RenamedFrom";
+          g_auto(GStrv) renamed_from = g_key_file_get_string_list (keyfile,
+                                                                   G_KEY_FILE_DESKTOP_GROUP,
+                                                                   X_FLATPAK_RENAMED_FROM,
+                                                                   NULL, NULL);
+          g_autoptr(GPtrArray) merged = g_ptr_array_new_with_free_func (g_free);
+          g_autoptr(GHashTable) seen = g_hash_table_new (g_str_hash, g_str_equal);
+          const char *new_suffix;
+          gsize i;
+
+
+          for (i = 0; renamed_from != NULL && renamed_from[i] != NULL; i++)
+            {
+              if (!g_hash_table_contains (seen, renamed_from[i]))
+                {
+                  gchar *copy = g_strdup (renamed_from[i]);
+                  g_hash_table_insert (seen, copy, copy);
+                  g_ptr_array_add (merged, g_steal_pointer (&copy));
+                }
+            }
+
+          /* If an app was renamed from com.example.Foo to net.example.Bar, and
+           * the new version exports net.example.Bar-suffix.desktop, we assume the
+           * old version exported com.example.Foo-suffix.desktop.
+           *
+           * This assertion is true because
+           * flatpak_name_matches_one_wildcard_prefix() is called on all
+           * exported files before we get here.
+           */
+          g_assert (g_str_has_prefix (name, app));
+          /* ".desktop" for the "main" desktop file; something like
+           * "-suffix.desktop" for extra ones.
+           */
+          new_suffix = name + strlen (app);
+
+          for (i = 0; previous_ids[i] != NULL; i++)
+            {
+              g_autofree gchar *previous_desktop = g_strconcat (previous_ids[i], new_suffix, NULL);
+              if (!g_hash_table_contains (seen, previous_desktop))
+                {
+                  g_hash_table_insert (seen, previous_desktop, previous_desktop);
+                  g_ptr_array_add (merged, g_steal_pointer (&previous_desktop));
+                }
+            }
+
+          if (merged->len > 0)
+            {
+              g_ptr_array_add (merged, NULL);
+              g_key_file_set_string_list (keyfile,
+                                          G_KEY_FILE_DESKTOP_GROUP,
+                                          X_FLATPAK_RENAMED_FROM,
+                                          (const char * const *) merged->pdata,
+                                          merged->len - 1);
+            }
+        }
     }
 
   groups = g_key_file_get_groups (keyfile, NULL);
@@ -6191,16 +6250,17 @@ out:
 }
 
 static gboolean
-rewrite_export_dir (const char     *app,
-                    const char     *branch,
-                    const char     *arch,
-                    GKeyFile       *metadata,
-                    FlatpakContext *context,
-                    int             source_parent_fd,
-                    const char     *source_name,
-                    const char     *source_path,
-                    GCancellable   *cancellable,
-                    GError        **error)
+rewrite_export_dir (const char         *app,
+                    const char         *branch,
+                    const char         *arch,
+                    GKeyFile           *metadata,
+                    const char * const *previous_ids,
+                    FlatpakContext     *context,
+                    int                 source_parent_fd,
+                    const char         *source_name,
+                    const char         *source_path,
+                    GCancellable       *cancellable,
+                    GError            **error)
 {
   gboolean ret = FALSE;
 
@@ -6253,7 +6313,7 @@ rewrite_export_dir (const char     *app,
         {
           g_autofree char *path = g_build_filename (source_path, dent->d_name, NULL);
 
-          if (!rewrite_export_dir (app, branch, arch, metadata, context,
+          if (!rewrite_export_dir (app, branch, arch, metadata, previous_ids, context,
                                    source_iter.fd, dent->d_name,
                                    path, cancellable, error))
             goto out;
@@ -6296,7 +6356,7 @@ rewrite_export_dir (const char     *app,
           if (g_str_has_suffix (dent->d_name, ".desktop") ||
               g_str_has_suffix (dent->d_name, ".service"))
             {
-              if (!export_desktop_file (app, branch, arch, metadata,
+              if (!export_desktop_file (app, branch, arch, metadata, previous_ids,
                                         source_iter.fd, dent->d_name, &stbuf, &new_name, cancellable, error))
                 goto out;
             }
@@ -6349,13 +6409,14 @@ out:
 }
 
 static gboolean
-flatpak_rewrite_export_dir (const char   *app,
-                            const char   *branch,
-                            const char   *arch,
-                            GKeyFile     *metadata,
-                            GFile        *source,
-                            GCancellable *cancellable,
-                            GError      **error)
+flatpak_rewrite_export_dir (const char         *app,
+                            const char         *branch,
+                            const char         *arch,
+                            GKeyFile           *metadata,
+                            const char * const *previous_ids,
+                            GFile              *source,
+                            GCancellable       *cancellable,
+                            GError            **error)
 {
   gboolean ret = FALSE;
 
@@ -6380,7 +6441,7 @@ flatpak_rewrite_export_dir (const char   *app,
     return FALSE;
 
   /* The fds are closed by this call */
-  if (!rewrite_export_dir (app, branch, arch, metadata, context,
+  if (!rewrite_export_dir (app, branch, arch, metadata, previous_ids, context,
                            parentfd, name, source_path,
                            cancellable, error))
     goto out;
@@ -6962,6 +7023,7 @@ flatpak_dir_deploy (FlatpakDir          *self,
   g_autofree char *metadata_contents = NULL;
   g_auto(GStrv) ref_parts = NULL;
   gboolean is_app;
+  g_autofree const char **previous_ids = NULL;
 
   if (!flatpak_dir_ensure_repo (self, cancellable, error))
     return FALSE;
@@ -7236,6 +7298,8 @@ flatpak_dir_deploy (FlatpakDir          *self,
                                 G_FILE_CREATE_REPLACE_DESTINATION, NULL, cancellable, error))
     return TRUE;
 
+  if (old_deploy_data)
+    previous_ids = flatpak_deploy_data_get_previous_ids (old_deploy_data, NULL);
 
   export = g_file_get_child (checkoutdir, "export");
 
@@ -7306,7 +7370,7 @@ flatpak_dir_deploy (FlatpakDir          *self,
         return FALSE;
 
       if (!flatpak_rewrite_export_dir (ref_parts[1], ref_parts[3], ref_parts[2],
-                                       keyfile, export,
+                                       keyfile, previous_ids, export,
                                        cancellable,
                                        error))
         return FALSE;
@@ -7334,7 +7398,7 @@ flatpak_dir_deploy (FlatpakDir          *self,
                                              checksum,
                                              (char **) subpaths,
                                              installed_size,
-                                             old_deploy_data);
+                                             previous_ids);
 
   deploy_data_file = g_file_get_child (checkoutdir, "deploy");
   if (!flatpak_variant_save (deploy_data_file, deploy_data, cancellable, error))
