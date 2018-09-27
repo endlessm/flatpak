@@ -1,3 +1,23 @@
+flatpak (1.0.0-0endless1xenial1) xenial; urgency=medium
+
+  * Resync packaging changes (T23863):
+    - Drop debhelper compat back to 9 since 10 is not in xenial.
+      + debian/compat: Drop back to debhelper 9.
+      + debian/control: Add back dh-autoreconf and dh-systemd deps.
+      + debian/rules: Add back --with autoreconf and systemd.
+    - d/p/debian/Try-gtk-3.0-version-of-the-icon-cache-utility-first.patch:
+      bring back compatibility with gtk-update-icon-cache-3.0, for
+      backports
+    - (Build-)depend on libgtk-3-bin, not gtk-update-icon-cache, for the
+      jessie backport
+    - Build-Depend on libgpgme11-dev since libgpgme-dev is not in xenial
+    - Remove Rules-Requires-Root: no, which is not supported by stable's
+      gobject-introspection, debhelper, dpkg
+    - Revert gobject-introspection dependency to be unversioned, since the
+      version was only required for Rules-Requires-Root
+
+ -- Dan Nicholson <nicholson@endlessm.com>  Thu, 27 Sep 2018 21:00:13 +0000
+
 flatpak (1.0.0-0endless1) unstable; urgency=medium
 
   * New upstream release
