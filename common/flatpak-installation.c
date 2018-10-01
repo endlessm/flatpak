@@ -1752,7 +1752,8 @@ flatpak_installation_install_full (FlatpakInstallation    *self,
                             ostree_progress, cancellable, error))
     goto out;
 
-  if (g_str_has_prefix (ref, "app"))
+  if (!(flags & FLATPAK_INSTALL_FLAGS_NO_TRIGGERS) &&
+      g_str_has_prefix (ref, "app"))
     flatpak_dir_run_triggers (dir_clone, cancellable, NULL);
 
   /* Note that if the caller sets FLATPAK_INSTALL_FLAGS_NO_DEPLOY we must
@@ -1927,7 +1928,8 @@ flatpak_installation_update_full (FlatpakInstallation    *self,
                            ostree_progress, cancellable, error))
     goto out;
 
-  if (g_str_has_prefix (ref, "app"))
+  if (!(flags & FLATPAK_UPDATE_FLAGS_NO_TRIGGERS) &&
+      g_str_has_prefix (ref, "app"))
     flatpak_dir_run_triggers (dir_clone, cancellable, NULL);
 
   result = get_ref (dir, ref, cancellable, error);
@@ -2070,7 +2072,8 @@ flatpak_installation_uninstall_full (FlatpakInstallation    *self,
                               cancellable, error))
     return FALSE;
 
-  if (g_str_has_prefix (ref, "app"))
+  if (!(flags & FLATPAK_UNINSTALL_FLAGS_NO_TRIGGERS) &&
+      g_str_has_prefix (ref, "app"))
     flatpak_dir_run_triggers (dir_clone, cancellable, NULL);
 
   if (!(flags & FLATPAK_UNINSTALL_FLAGS_NO_PRUNE))
@@ -2568,7 +2571,7 @@ flatpak_installation_list_installed_related_refs_sync (FlatpakInstallation *self
 }
 
 /**
- * flatpak_installation_remove_local_ref_sync
+ * flatpak_installation_remove_local_ref_sync:
  * @self: a #FlatpakInstallation
  * @remote_name: the name of the remote
  * @ref: the ref
@@ -2585,6 +2588,7 @@ flatpak_installation_list_installed_related_refs_sync (FlatpakInstallation *self
  * referred to by @ref from the underlying OSTree repo, you should use
  * flatpak_installation_prune_local_repo() to do that.
  *
+ * Since: 0.10.0
  * Returns: %TRUE on success
  */
 gboolean
@@ -2604,7 +2608,7 @@ flatpak_installation_remove_local_ref_sync (FlatpakInstallation *self,
 }
 
 /**
- * flatpak_installation_cleanup_local_refs_sync
+ * flatpak_installation_cleanup_local_refs_sync:
  * @self: a #FlatpakInstallation
  * @cancellable: (nullable): a #GCancellable
  * @error: return location for a #GError
@@ -2637,14 +2641,15 @@ flatpak_installation_cleanup_local_refs_sync (FlatpakInstallation *self,
 }
 
 /**
- * flatpak_installation_prune_local_repo
+ * flatpak_installation_prune_local_repo:
  * @self: a #FlatpakInstallation
  * @cancellable: (nullable): a #GCancellable
  * @error: return location for a #GError
  *
  * Remove all orphaned OSTree objects from the underlying OSTree repo in
- * @installation.
+ * @self.
  *
+ * Since: 0.10.0
  * Returns: %TRUE on success
  */
 gboolean
@@ -2659,4 +2664,33 @@ flatpak_installation_prune_local_repo (FlatpakInstallation *self,
     return FALSE;
 
   return flatpak_dir_prune (dir, cancellable, error);
+}
+
+/**
+ * flatpak_installation_run_triggers:
+ * @self: a #FlatpakInstallation
+ * @cancellable: (nullable): a #GCancellable
+ * @error: return location for a #GError
+ *
+ * Run the trigger commands to update the files exported by the apps in
+ * @self. Should be used after one or more app install, upgrade or
+ * uninstall operations with the %FLATPAK_INSTALL_FLAGS_NO_TRIGGERS,
+ * %FLATPAK_UPDATE_FLAGS_NO_TRIGGERS or %FLATPAK_UNINSTALL_FLAGS_NO_TRIGGERS
+ * flags set.
+ *
+ * Since: 1.0.3
+ * Returns: %TRUE on success
+ */
+gboolean
+flatpak_installation_run_triggers (FlatpakInstallation *self,
+                                   GCancellable        *cancellable,
+                                   GError             **error)
+{
+  g_autoptr(FlatpakDir) dir = NULL;
+
+  dir = flatpak_installation_get_dir (self, error);
+  if (dir == NULL)
+    return FALSE;
+
+  return flatpak_dir_run_triggers (dir, cancellable, error);
 }
