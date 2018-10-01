@@ -2571,7 +2571,7 @@ flatpak_installation_list_installed_related_refs_sync (FlatpakInstallation *self
 }
 
 /**
- * flatpak_installation_remove_local_ref_sync
+ * flatpak_installation_remove_local_ref_sync:
  * @self: a #FlatpakInstallation
  * @remote_name: the name of the remote
  * @ref: the ref
@@ -2588,6 +2588,7 @@ flatpak_installation_list_installed_related_refs_sync (FlatpakInstallation *self
  * referred to by @ref from the underlying OSTree repo, you should use
  * flatpak_installation_prune_local_repo() to do that.
  *
+ * Since: 0.10.0
  * Returns: %TRUE on success
  */
 gboolean
@@ -2607,7 +2608,7 @@ flatpak_installation_remove_local_ref_sync (FlatpakInstallation *self,
 }
 
 /**
- * flatpak_installation_cleanup_local_refs_sync
+ * flatpak_installation_cleanup_local_refs_sync:
  * @self: a #FlatpakInstallation
  * @cancellable: (nullable): a #GCancellable
  * @error: return location for a #GError
@@ -2640,14 +2641,15 @@ flatpak_installation_cleanup_local_refs_sync (FlatpakInstallation *self,
 }
 
 /**
- * flatpak_installation_prune_local_repo
+ * flatpak_installation_prune_local_repo:
  * @self: a #FlatpakInstallation
  * @cancellable: (nullable): a #GCancellable
  * @error: return location for a #GError
  *
  * Remove all orphaned OSTree objects from the underlying OSTree repo in
- * @installation.
+ * @self.
  *
+ * Since: 0.10.0
  * Returns: %TRUE on success
  */
 gboolean
@@ -2665,14 +2667,16 @@ flatpak_installation_prune_local_repo (FlatpakInstallation *self,
 }
 
 /**
- * flatpak_installation_run_triggers
+ * flatpak_installation_run_triggers:
  * @self: a #FlatpakInstallation
  * @cancellable: (nullable): a #GCancellable
  * @error: return location for a #GError
  *
  * Run the trigger commands to update the files exported by the apps in
  * @self. Should be used after one or more app install, upgrade or
- * uninstall operations with the NO_TRIGGERS flag set.
+ * uninstall operations with the #FLATPAK_INSTALL_FLAGS_NO_TRIGGERS,
+ * #FLATPAK_UPDATE_FLAGS_NO_TRIGGERS or #FLATPAK_UNINSTALL_FLAGS_NO_TRIGGERS
+ * flags set.
  *
  * Since: 1.0.3
  * Returns: %TRUE on success
