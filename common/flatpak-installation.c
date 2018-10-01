@@ -1752,7 +1752,7 @@ flatpak_installation_install_full (FlatpakInstallation    *self,
                             ostree_progress, cancellable, error))
     goto out;
 
-  if ((flags & FLATPAK_INSTALL_FLAGS_NO_TRIGGERS) != 0 &&
+  if ((flags & FLATPAK_INSTALL_FLAGS_NO_TRIGGERS) == 0 &&
       g_str_has_prefix (ref, "app"))
     flatpak_dir_run_triggers (dir_clone, cancellable, NULL);
 
@@ -1928,7 +1928,7 @@ flatpak_installation_update_full (FlatpakInstallation    *self,
                            ostree_progress, cancellable, error))
     goto out;
 
-  if ((flags & FLATPAK_UPDATE_FLAGS_NO_TRIGGERS) != 0 &&
+  if ((flags & FLATPAK_UPDATE_FLAGS_NO_TRIGGERS) == 0 &&
       g_str_has_prefix (ref, "app"))
     flatpak_dir_run_triggers (dir_clone, cancellable, NULL);
 
@@ -2072,7 +2072,7 @@ flatpak_installation_uninstall_full (FlatpakInstallation    *self,
                               cancellable, error))
     return FALSE;
 
-  if ((flags & FLATPAK_UNINSTALL_FLAGS_NO_TRIGGERS) != 0 &&
+  if ((flags & FLATPAK_UNINSTALL_FLAGS_NO_TRIGGERS) == 0 &&
       g_str_has_prefix (ref, "app"))
     flatpak_dir_run_triggers (dir_clone, cancellable, NULL);
 
