@@ -27,6 +27,7 @@ libflatpak.so.0 libflatpak0 #MINVER#
  flatpak_installation_get_id@Base 0.8.0
  flatpak_installation_get_installed_ref@Base 0.5.2
  flatpak_installation_get_is_user@Base 0.5.2
+ flatpak_installation_get_min_free_space_bytes@Base 1.0.0-0endless1
  flatpak_installation_get_path@Base 0.5.2
  flatpak_installation_get_priority@Base 0.8.0
  flatpak_installation_get_remote_by_name@Base 0.5.2
