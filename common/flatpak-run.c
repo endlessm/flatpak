@@ -36,6 +36,7 @@
 #ifdef HAVE_DCONF
 #include <dconf/dconf.h>
 #endif
+#include <libeos-parental-controls/app-filter.h>
 
 #ifdef ENABLE_SECCOMP
 #include <seccomp.h>
@@ -3246,6 +3247,8 @@ flatpak_run_app (const char     *app_ref,
   gboolean generate_ld_so_conf = TRUE;
   gboolean use_ld_so_cache = TRUE;
   gboolean sandboxed = (flags & FLATPAK_RUN_FLAG_SANDBOX) != 0;
+  g_autoptr(EpcAppFilter) app_filter = NULL;
+  g_autoptr(GAsyncResult) app_filter_result = NULL;
 
   struct stat s;
 
@@ -3253,6 +3256,16 @@ flatpak_run_app (const char     *app_ref,
   if (app_ref_parts == NULL)
     return FALSE;
 
+  /* Check that this user is actually allowed to run this app. */
+  app_filter = epc_get_app_filter (NULL, getuid (), TRUE, cancellable, error);
+  if (app_filter == NULL)
+    return FALSE;
+
+  if (!epc_app_filter_is_flatpak_ref_allowed (app_filter, app_ref))
+    return flatpak_fail (error, _("%s is blacklisted for the current user"),
+                         app_ref);
+
+  /* Construct the bwrap context. */
   bwrap = flatpak_bwrap_new (NULL);
   flatpak_bwrap_add_arg (bwrap, flatpak_get_bwrap ());
 
