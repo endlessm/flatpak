@@ -33,6 +33,7 @@
 #include <unistd.h>
 #include <gio/gunixfdlist.h>
 #include <dconf/dconf.h>
+#include <libeos-parental-controls/app-filter.h>
 
 #ifdef ENABLE_SECCOMP
 #include <seccomp.h>
@@ -3030,6 +3031,17 @@ regenerate_ld_cache (GPtrArray    *base_argv_array,
   return glnx_steal_fd (&ld_so_fd);
 }
 
+static void
+async_result_cb (GObject      *obj,
+                 GAsyncResult *result,
+                 gpointer      user_data)
+{
+  GAsyncResult **result_out = user_data;
+
+  g_assert (*result_out == NULL);
+  *result_out = g_object_ref (result);
+}
+
 gboolean
 flatpak_run_app (const char     *app_ref,
                  FlatpakDeploy  *app_deploy,
@@ -3080,6 +3092,8 @@ flatpak_run_app (const char     *app_ref,
   gboolean generate_ld_so_conf = TRUE;
   gboolean use_ld_so_cache = TRUE;
   gboolean sandboxed = (flags & FLATPAK_RUN_FLAG_SANDBOX) != 0;
+  g_autoptr(EpcAppFilter) app_filter = NULL;
+  g_autoptr(GAsyncResult) app_filter_result = NULL;
 
   struct stat s;
 
@@ -3087,6 +3101,22 @@ flatpak_run_app (const char     *app_ref,
   if (app_ref_parts == NULL)
     return FALSE;
 
+  /* Check that this user is actually allowed to run this app. */
+  epc_get_app_filter_async (NULL, getuid (), TRUE, cancellable,
+                            async_result_cb, &app_filter_result);
+
+  while (app_filter_result == NULL)
+    g_main_context_iteration (NULL, TRUE);
+
+  app_filter = epc_get_app_filter_finish (app_filter_result, error);
+  if (app_filter == NULL)
+    return FALSE;
+
+  if (!epc_app_filter_is_flatpak_ref_allowed (app_filter, app_ref))
+    return flatpak_fail (error, "%s is blacklisted for the current user",
+                         app_ref);
+
+  /* Construct the bwrap context. */
   bwrap = flatpak_bwrap_new (NULL);
   flatpak_bwrap_add_arg (bwrap, flatpak_get_bwrap ());
 
