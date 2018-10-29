@@ -181,6 +181,7 @@ POLKIT_GOBJECT_REQUIRED=0.98
 
 PKG_CHECK_MODULES(BASE, [glib-2.0 >= $GLIB_REQS gio-2.0 gio-unix-2.0 libarchive >= 2.8.0 libxml-2.0 >= 2.4 ])
 PKG_CHECK_MODULES(SOUP, [libsoup-2.4])
+PKG_CHECK_MODULES([EOS_PARENTAL_CONTROLS], [eos-parental-controls-0])
 
 save_LIBS=$LIBS
 LIBS=$BASE_LIBS
