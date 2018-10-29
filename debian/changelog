@@ -1,3 +1,10 @@
+flatpak (1.0.0-0endless2) unstable; urgency=medium
+
+  * Add parental controls support to flatpak-run
+    - Adds a new libeos-parental-controls dependency
+
+ -- Philip Withnall <withnall@endlessm.com>  Fri, 12 Oct 2018 18:07:00 +1300
+
 flatpak (1.0.0-0endless1) unstable; urgency=medium
 
   * New upstream release
