@@ -3031,17 +3031,6 @@ regenerate_ld_cache (GPtrArray    *base_argv_array,
   return glnx_steal_fd (&ld_so_fd);
 }
 
-static void
-async_result_cb (GObject      *obj,
-                 GAsyncResult *result,
-                 gpointer      user_data)
-{
-  GAsyncResult **result_out = user_data;
-
-  g_assert (*result_out == NULL);
-  *result_out = g_object_ref (result);
-}
-
 gboolean
 flatpak_run_app (const char     *app_ref,
                  FlatpakDeploy  *app_deploy,
@@ -3102,13 +3091,7 @@ flatpak_run_app (const char     *app_ref,
     return FALSE;
 
   /* Check that this user is actually allowed to run this app. */
-  epc_get_app_filter_async (NULL, getuid (), TRUE, cancellable,
-                            async_result_cb, &app_filter_result);
-
-  while (app_filter_result == NULL)
-    g_main_context_iteration (NULL, TRUE);
-
-  app_filter = epc_get_app_filter_finish (app_filter_result, error);
+  app_filter = epc_get_app_filter (NULL, getuid (), TRUE, cancellable, error);
   if (app_filter == NULL)
     return FALSE;
 
