@@ -3090,12 +3090,19 @@ flatpak_run_app (const char     *app_ref,
   if (app_ref_parts == NULL)
     return FALSE;
 
-  /* Check that this user is actually allowed to run this app. */
-  app_filter = epc_get_app_filter (NULL, getuid (), TRUE, cancellable, error);
-  if (app_filter == NULL)
-    return FALSE;
+  /* Check that this user is actually allowed to run this app. When running
+   * from the gnome-initial-setup session, an app filter might not be available. */
+  app_filter = epc_get_app_filter (NULL, getuid (), TRUE, cancellable, &my_error);
+  if (my_error != NULL &&
+      !g_error_matches (my_error, EPC_APP_FILTER_ERROR, EPC_APP_FILTER_ERROR_INVALID_USER))
+    {
+      g_propagate_error (error, g_steal_pointer (&my_error));
+      return FALSE;
+    }
+  g_clear_error (&my_error);
 
-  if (!epc_app_filter_is_flatpak_ref_allowed (app_filter, app_ref))
+  if (app_filter != NULL &&
+      !epc_app_filter_is_flatpak_ref_allowed (app_filter, app_ref))
     return flatpak_fail (error, "%s is blacklisted for the current user",
                          app_ref);
 
