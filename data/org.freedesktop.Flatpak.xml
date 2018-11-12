@@ -151,6 +151,11 @@
       <arg type='s' name='repo_path' direction='out'/>
     </method>
 
+    <method name="CancelPull">
+      <arg type='s' name='installation' direction='in'/>
+      <arg type='s' name='repo_path' direction='in'/>
+    </method>
+
   </interface>
 
 </node>
