@@ -144,6 +144,13 @@
       <arg type='s' name='installation' direction='in'/>
     </method>
 
+    <method name="GetChildRepoForPull">
+      <arg type='s' name='ref' direction='in'/>
+      <arg type='s' name='commit' direction='in'/>
+      <arg type='s' name='installation' direction='in'/>
+      <arg type='s' name='repo_path' direction='out'/>
+    </method>
+
   </interface>
 
 </node>
