@@ -8047,6 +8047,8 @@ flatpak_dir_install (FlatpakDir          *self,
 
       AsContentRating *rating = appstream_get_latest_content_rating (app);
 
+      if (!epc_app_filter_is_app_installation_allowed (app_filter))
+        return flatpak_fail (error, _("Current user is not allowed to install apps"));
       if (!appstream_check_rating (rating, app_filter))
         return flatpak_fail (error,
                              /* Translators: The placeholder is for an app ref. */
