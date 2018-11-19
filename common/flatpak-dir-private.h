@@ -515,6 +515,12 @@ gboolean    flatpak_dir_load_appstream_store (FlatpakDir    *self,
                                               AsStore       *store,
                                               GCancellable  *cancellable,
                                               GError       **error);
+AsApp      *flatpak_dir_get_appstream_for_ref (FlatpakDir          *self,
+                                               const char          *remote_name,
+                                               const char          *ref_string,
+                                               const char          *arch,
+                                               GCancellable        *cancellable,
+                                               GError             **error);
 gboolean    flatpak_dir_pull (FlatpakDir                           *self,
                               FlatpakRemoteState                   *state,
                               const char                           *ref,

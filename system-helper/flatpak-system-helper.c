@@ -20,6 +20,7 @@
 
 #include "config.h"
 
+#include <libeos-parental-controls/app-filter.h>
 #include <locale.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,6 +32,7 @@
 #include "flatpak-dir-private.h"
 #include "flatpak-oci-registry-private.h"
 #include "flatpak-error.h"
+#include "flatpak-parental-controls-private.h"
 
 static PolkitAuthority *authority = NULL;
 static FlatpakSystemHelper *helper = NULL;
@@ -1193,6 +1195,87 @@ handle_update_summary (FlatpakSystemHelper   *object,
   return TRUE;
 }
 
+/* Add entries to the #PolkitDetails for authorizing the Deploy() method, based
+ * on whether the deployment in question is restricted by the user’s parental
+ * controls settings. This exposes the parental controls in the polkit rule and
+ * allows authorization decisions to be made based on them, without hard-coding
+ * a policy here. */
+static gboolean
+authorize_deploy_add_polkit_details (const gchar    *installation,
+                                     const gchar    *ref,
+                                     const gchar    *origin,
+                                     PolkitSubject  *subject,
+                                     PolkitDetails  *details,
+                                     GError        **error)
+{
+  g_autoptr(GError) local_error = NULL;
+  g_autoptr(FlatpakDir) system = NULL;
+  g_autoptr(AsApp) app = NULL;
+  g_autoptr(EpcAppFilter) app_filter = NULL;
+  g_autoptr(AutoPolkitSubject) subject_process = NULL;
+  gint subject_uid;
+
+  g_debug ("Getting parental controls details for %s from %s", ref, origin);
+
+  system = dir_get_system (installation, error);
+  if (system == NULL)
+    return FALSE;
+
+  if (!flatpak_dir_ensure_repo (system, NULL, error))
+    return FALSE;
+
+  /* Get the AppStream data for this app, so we can check its content rating. */
+  app = flatpak_dir_get_appstream_for_ref (system, origin, ref, NULL, NULL, &local_error);
+  if (local_error != NULL)
+    {
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return FALSE;
+    }
+
+  /* Get the parental controls for the invoking user. */
+  subject_process = polkit_system_bus_name_get_process_sync (POLKIT_SYSTEM_BUS_NAME (subject),
+                                                             NULL, error);
+  if (subject_process == NULL)
+    return FALSE;
+
+  subject_uid = polkit_unix_process_get_uid (POLKIT_UNIX_PROCESS (subject_process));
+  if (subject_uid == -1)
+    {
+      g_set_error_literal (error, G_DBUS_ERROR, G_DBUS_ERROR_AUTH_FAILED,
+                           "Failed to get subject UID");
+      return FALSE;
+    }
+
+  g_debug ("Subject UID is %d", subject_uid);
+
+  app_filter = epc_get_app_filter (NULL, subject_uid, TRUE, NULL, error);
+  if (app_filter == NULL)
+    return FALSE;
+
+  polkit_details_insert (details,
+                         "parental-controls-repo-installation-allowed",
+                         epc_app_filter_is_system_installation_allowed (app_filter) ? "1" : "0");
+
+  /* Check that this user is actually allowed to install this app. */
+  if (app != NULL)
+    {
+      AsContentRating *rating = flatpak_appstream_get_latest_content_rating (app);
+
+      polkit_details_insert (details,
+                             "parental-controls-is-appropriate",
+                             flatpak_appstream_check_rating (rating, app_filter) ? "1" : "0");
+    }
+  else
+    {
+      g_debug ("No AppStream data found for %s — assuming it has no content "
+               "restrictions", ref);
+      polkit_details_insert (details,
+                             "parental-controls-is-appropriate", "unknown");
+    }
+
+  return TRUE;
+}
+
 static gboolean
 handle_generate_oci_summary (FlatpakSystemHelper   *object,
                              GDBusMethodInvocation *invocation,
@@ -1305,6 +1388,14 @@ flatpak_authorize_method_handler (GDBusInterfaceSkeleton *interface,
       else
         {
           gboolean is_app, is_install;
+          g_autoptr(GError) local_error = NULL;
+
+          if (!authorize_deploy_add_polkit_details (installation, ref, origin,
+                                                    subject, details, &local_error))
+            {
+              g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
+              return FALSE;
+            }
 
           /* These flags allow clients to "upgrade" the permission,
            * avoiding the need for multiple polkit dialogs when we first
@@ -1369,14 +1460,36 @@ flatpak_authorize_method_handler (GDBusInterfaceSkeleton *interface,
     }
   else if (g_strcmp0 (method_name, "InstallBundle") == 0)
     {
-      const char *path;
+      const char *path, *remote, *installation;
       guint32 flags;
+      g_autoptr(GFile) path_file = NULL;
+      g_autoptr(GVariant) metadata = NULL;
+      g_autofree char *ref = NULL;
+      g_autoptr(GError) local_error = NULL;
 
       g_variant_get_child (parameters, 0, "^&ay", &path);
       g_variant_get_child (parameters, 1, "u", &flags);
+      g_variant_get_child (parameters, 2, "&s", &remote);
+      g_variant_get_child (parameters, 3, "&s", &installation);
 
       action = "org.freedesktop.Flatpak.install-bundle";
       no_interaction = (flags & FLATPAK_HELPER_INSTALL_BUNDLE_FLAGS_NO_INTERACTION) != 0;
+
+      path_file = g_file_new_for_path (path);
+      metadata = flatpak_bundle_load (path_file, NULL, &ref, NULL, NULL, NULL,
+                                      NULL, NULL, NULL, &local_error);
+      if (metadata == NULL)
+        {
+          g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
+          return FALSE;
+        }
+
+      if (!authorize_deploy_add_polkit_details (installation, ref, remote,
+                                                subject, details, &local_error))
+        {
+          g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
+          return FALSE;
+        }
 
       polkit_details_insert (details, "path", path);
     }

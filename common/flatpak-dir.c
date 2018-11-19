@@ -46,6 +46,7 @@
 #include "flatpak-dir-private.h"
 #include "flatpak-utils-private.h"
 #include "flatpak-oci-registry-private.h"
+#include "flatpak-parental-controls-private.h"
 #include "flatpak-ref.h"
 #include "flatpak-run-private.h"
 #include "flatpak-appdata-private.h"
@@ -7884,36 +7885,35 @@ flatpak_dir_load_appstream_store (FlatpakDir    *self,
   return success;
 }
 
-/* Convert an #EpcAppFilterOarsValue to an #AsContentRatingValue. This is
- * actually a trivial cast, since the types are defined the same; but throw in
- * a static assertion to be sure. */
-static AsContentRatingValue
-convert_app_filter_oars_value (EpcAppFilterOarsValue filter_value)
-{
-  G_STATIC_ASSERT (AS_CONTENT_RATING_VALUE_LAST == EPC_APP_FILTER_OARS_VALUE_INTENSE + 1);
-
-  return (AsContentRatingValue) filter_value;
-}
-
-/* Get the AppStream data for @ref, loading it from the locally cached AppStream
- * XML. If the AppStream file doesn’t exist, or if @ref_string is not listed in
- * it, %NULL will be returned without an error. An error will be returned if
- * parsing the AppStream file fails.
+/**
+ * flatpak_dir_get_appstream_for_ref:
+ * @self: a #FlatpakDir
+ * @remote_name: name of the remote to load the AppStream data from
+ * @ref_string: a flatpak ref to look up, in string form
+ * @arch: (nullable): name of the architecture to load the AppStream data for,
+ *    or %NULL to use the default
+ * @cancellable: (nullable): a #GCancellable, or %NULL
+ * @error: return location for a #GError
+ *
+ * Get the AppStream data for @ref_string, loading it from the locally cached
+ * AppStream XML. If the AppStream file doesn’t exist, or if @ref_string is not
+ * listed in it, %NULL will be returned without an error. An error will be
+ * returned if parsing the AppStream file fails.
  *
  * If @arch is %NULL, the default architecture will be used.
  *
  * If the @ref_string is for a runtime, %NULL will be returned immediately with
  * no error.
  *
- * A strong reference is returned on the #AsApp.
+ * Returns: (transfer full) (nullable): the AppStream data for @ref_string, or %NULL
  */
-static AsApp *
-get_appstream_for_ref (FlatpakDir          *self,
-                       FlatpakRemoteState  *state,
-                       const char          *ref_string,
-                       const char          *arch,
-                       GCancellable        *cancellable,
-                       GError             **error)
+AsApp *
+flatpak_dir_get_appstream_for_ref (FlatpakDir    *self,
+                                   const char    *remote_name,
+                                   const char    *ref_string,
+                                   const char    *arch,
+                                   GCancellable  *cancellable,
+                                   GError       **error)
 {
   g_autoptr(FlatpakRef) ref = NULL;
 
@@ -7928,7 +7928,7 @@ get_appstream_for_ref (FlatpakDir          *self,
   g_autoptr(AsStore) store = as_store_new ();
   g_autofree char *unique_id = NULL;
 
-  if (!flatpak_dir_load_appstream_store (self, state->remote_name, arch, store,
+  if (!flatpak_dir_load_appstream_store (self, remote_name, arch, store,
                                          cancellable, error))
     return NULL;
 
@@ -7947,52 +7947,58 @@ get_appstream_for_ref (FlatpakDir          *self,
   return g_object_ref (app);
 }
 
-/* Get the #AsContentRating from @app with the latest OARS standards version.
- * If no suitable #AsContentRating can be found, %NULL is returned. */
-static AsContentRating *
-appstream_get_latest_content_rating (AsApp *app)
-{
-  AsContentRating *rating = NULL;
-
-  rating = as_app_get_content_rating (app, "oars-1.1");
-  if (rating != NULL)
-    return rating;
-
-  rating = as_app_get_content_rating (app, "oars-1.0");
-  if (rating != NULL)
-    return rating;
-
-  return NULL;
-}
-
-/* Check whether the OARS rating in @rating is as, or less, extreme than the
- * user’s preferences in @filter. If so (i.e. if the app is suitable for this
- * user to use), return %TRUE; otherwise return %FALSE.
- *
- * @rating may be %NULL if no OARS ratings are provided for the app. If so,
- * we have to assume the most restrictive ratings. */
+/* Check the user’s parental controls allow installation of @ref from
+ * @remote_name by looking at its AppStream data (which must already be cached).
+ * If @ref should not be installed, an error is returned. */
 static gboolean
-appstream_check_rating (AsContentRating *rating  /* (nullable) */,
-                        EpcAppFilter    *filter)
+flatpak_dir_user_check_parental_controls (FlatpakDir    *self,
+                                          const gchar   *remote_name,
+                                          const gchar   *ref,
+                                          GCancellable  *cancellable,
+                                          GError       **error)
 {
-  g_autofree const gchar **oars_sections = epc_app_filter_get_oars_sections (filter);
+  g_autoptr(AsApp) app = NULL;
+  g_autoptr(GError) local_error = NULL;
 
-  for (gsize i = 0; oars_sections[i] != NULL; i++)
+  /* The system helper implements its own checks via polkit. */
+  if (!self->user)
+    return TRUE;
+
+  /* Get the AppStream data for this app, so we can check its content rating. */
+  app = flatpak_dir_get_appstream_for_ref (self, remote_name, ref, NULL,
+                                           cancellable, &local_error);
+
+  if (local_error != NULL)
     {
-      AsContentRatingValue rating_value;
-      EpcAppFilterOarsValue filter_value = epc_app_filter_get_oars_value (filter,
-                                                                          oars_sections[i]);
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return FALSE;
+    }
 
-      if (rating != NULL)
-        rating_value = as_content_rating_get_value (rating, oars_sections[i]);
-      else
-        rating_value = AS_CONTENT_RATING_VALUE_INTENSE;
-
-      if (rating_value == AS_CONTENT_RATING_VALUE_UNKNOWN ||
-          filter_value == EPC_APP_FILTER_OARS_VALUE_UNKNOWN)
-        continue;
-      else if (convert_app_filter_oars_value (filter_value) < rating_value)
+  /* Check that this user is actually allowed to install this app. If we
+   * couldn’t get the AppStream data for it, assume it’s installable by
+   * anyone. */
+  if (app != NULL)
+    {
+      g_autoptr(EpcAppFilter) app_filter = NULL;
+      app_filter = epc_get_app_filter (NULL, getuid (), TRUE, cancellable, error);
+      if (app_filter == NULL)
         return FALSE;
+
+      AsContentRating *rating = flatpak_appstream_get_latest_content_rating (app);
+
+      g_assert (self->user);
+      if (!epc_app_filter_is_user_installation_allowed (app_filter))
+        return flatpak_fail (error, _("Current user is not allowed to install apps"));
+      if (!flatpak_appstream_check_rating (rating, app_filter))
+        return flatpak_fail (error,
+                             /* Translators: The placeholder is for an app ref. */
+                             _("%s has content too extreme for the current user"),
+                             ref);
+    }
+  else
+    {
+      g_debug ("No AppStream data found for %s — assuming it has no content "
+               "restrictions", ref);
     }
 
   return TRUE;
@@ -8020,41 +8026,9 @@ flatpak_dir_install (FlatpakDir          *self,
   if (no_static_deltas)
     flatpak_flags |= FLATPAK_PULL_FLAGS_NO_STATIC_DELTAS;
 
-  /* Get the AppStream data for this app, so we can check its content rating. */
-  g_autoptr(AsApp) app = get_appstream_for_ref (self, state, ref, NULL,
-                                                cancellable, &local_error);
-
-  if (local_error != NULL)
-    {
-      g_propagate_error (error, g_steal_pointer (&local_error));
-      return FALSE;
-    }
-
-  /* Check that this user is actually allowed to install this app. If we
-   * couldn’t get the AppStream data for it, assume it’s installable by
-   * anyone. */
-  if (app == NULL)
-    {
-      g_debug ("No AppStream data found for %s — assuming it has no content "
-               "restrictions", ref);
-    }
-  else
-    {
-      g_autoptr(EpcAppFilter) app_filter = NULL;
-      app_filter = epc_get_app_filter (NULL, getuid (), TRUE, cancellable, error);
-      if (app_filter == NULL)
-        return FALSE;
-
-      AsContentRating *rating = appstream_get_latest_content_rating (app);
-
-      if (!epc_app_filter_is_app_installation_allowed (app_filter))
-        return flatpak_fail (error, _("Current user is not allowed to install apps"));
-      if (!appstream_check_rating (rating, app_filter))
-        return flatpak_fail (error,
-                             /* Translators: The placeholder is for an app ref. */
-                             _("%s has content too extreme for the current user"),
-                             ref);
-    }
+  if (!flatpak_dir_user_check_parental_controls (self, state->remote_name,
+                                                 ref, cancellable, error))
+    return FALSE;
 
   /* Start the installation. */
   if (flatpak_dir_use_system_helper (self, NULL))
@@ -8400,6 +8374,9 @@ flatpak_dir_install_bundle (FlatpakDir   *self,
 
   parts = flatpak_decompose_ref (ref, error);
   if (parts == NULL)
+    return FALSE;
+
+  if (!flatpak_dir_user_check_parental_controls (self, remote, ref, cancellable, error))
     return FALSE;
 
   deploy_data = flatpak_dir_get_deploy_data (self, ref, FLATPAK_DEPLOY_VERSION_ANY, cancellable, NULL);
