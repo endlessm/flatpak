@@ -102,6 +102,8 @@ libflatpak_common_la_SOURCES = \
 	common/flatpak-utils-private.h \
 	common/flatpak-chain-input-stream.c \
 	common/flatpak-chain-input-stream-private.h \
+	common/flatpak-parental-controls.c \
+	common/flatpak-parental-controls-private.h \
 	common/flatpak-portal-error.c \
 	common/flatpak-portal-error.h \
 	common/flatpak-json.c \
