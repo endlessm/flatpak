@@ -1163,6 +1163,42 @@ flatpak_dir_system_helper_call (FlatpakDir   *self,
 }
 
 static gboolean
+flatpak_dir_system_helper_call_cancel_pull (FlatpakDir    *self,
+                                            const gchar   *arg_installation,
+                                            const gchar   *arg_repo_path,
+                                            GCancellable  *cancellable,
+                                            GError       **error)
+{
+  g_autoptr(GVariant) ret =
+    flatpak_dir_system_helper_call (self, "CancelPull",
+                                    g_variant_new ("(ss)", arg_installation, arg_repo_path),
+                                    cancellable, error);
+
+  return ret != NULL;
+}
+
+static gboolean
+flatpak_dir_system_helper_get_child_repo_for_pull (FlatpakDir    *self,
+                                                   const gchar   *ref,
+                                                   const gchar   *commit,
+                                                   const gchar   *arg_installation,
+                                                   gchar        **repo_path,
+                                                   GCancellable  *cancellable,
+                                                   GError       **error)
+{
+  g_autoptr(GVariant) ret =
+    flatpak_dir_system_helper_call (self, "GetChildRepoForPull",
+                                    g_variant_new ("(sss)", ref, commit, arg_installation),
+                                    cancellable, error);
+
+  if (ret == NULL)
+    return FALSE;
+  g_variant_get (ret, "(s)", repo_path);
+
+  return TRUE;
+}
+
+static gboolean
 flatpak_dir_system_helper_call_deploy (FlatpakDir         *self,
                                        const gchar        *arg_repo_path,
                                        guint               arg_flags,
@@ -7673,6 +7709,18 @@ appstream_check_rating (AsContentRating *rating  /* (nullable) */,
   return TRUE;
 }
 
+static void
+flatpak_dir_cancel_pull (FlatpakDir *self, GCancellable *cancellable, const char *repo_path)
+{
+  const char *installation = flatpak_dir_get_id (self);
+  g_autoptr(GError) error = NULL;
+
+  if (!flatpak_dir_system_helper_call_cancel_pull (self,
+                                                   installation ? installation : "",
+                                                   repo_path, cancellable, &error))
+    g_debug ("Error cancelling ongoing pull at %s: %s", repo_path, error->message);
+}
+
 gboolean
 flatpak_dir_install (FlatpakDir          *self,
                      gboolean             no_pull,
@@ -7733,8 +7781,6 @@ flatpak_dir_install (FlatpakDir          *self,
   /* Start the installation. */
   if (flatpak_dir_use_system_helper (self, NULL))
     {
-      g_autoptr(OstreeRepo) child_repo = NULL;
-      g_auto(GLnxLockFile) child_repo_lock = { 0, };
       const char *installation = flatpak_dir_get_id (self);
       const char *empty_subpaths[] = {NULL};
       const char **subpaths;
@@ -7773,6 +7819,7 @@ flatpak_dir_install (FlatpakDir          *self,
         {
           g_autoptr(FlatpakOciRegistry) registry = NULL;
           g_autoptr(GFile) registry_file = NULL;
+          g_auto(GLnxLockFile) child_repo_lock = { 0, };
 
           registry = flatpak_dir_create_system_child_oci_registry (self, &child_repo_lock, error);
           if (registry == NULL)
@@ -7803,30 +7850,78 @@ flatpak_dir_install (FlatpakDir          *self,
         }
       else
         {
-          /* We're pulling from a remote source, we do the network mirroring pull as a
-             user and hand back the resulting data to the system-helper, that trusts us
-             due to the GPG signatures in the repo */
+          /* If the system-helper can find bindfs on the system, we try to make a pull using the bindfs by
+             mounting repo/tmp/flatpak-cache-XXXXXX directory. If this operation is unsupported or failed,
+             the pull is then tried with the fallback codepath. */
 
-          child_repo = flatpak_dir_create_system_child_repo (self, &child_repo_lock, NULL, error);
+          g_autofree gchar *helper_child_repo_path = NULL;
+          g_autoptr(OstreeRepo) child_repo = NULL;
+          g_auto(GLnxLockFile) child_repo_lock = { 0, };
+          g_autoptr(GError) local_error = NULL;
+          gboolean fallback = FALSE;
+
+          if (!flatpak_dir_system_helper_get_child_repo_for_pull (self, ref, opt_commit,
+                                                                  installation ? installation : "",
+                                                                  &helper_child_repo_path, cancellable, &local_error))
+            {
+              if (g_error_matches (local_error, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD) ||
+                  g_error_matches (local_error, G_DBUS_ERROR, G_DBUS_ERROR_NOT_SUPPORTED))
+                g_debug ("Failed to get child repo in repo/tmp: %s", local_error->message);
+              else
+                g_warning ("Failed to get child repo in repo/tmp: %s", local_error->message);
+            }
+          else
+            {
+              g_autoptr(GFile) repo_file = g_file_new_for_path (helper_child_repo_path);
+              g_autoptr(OstreeRepo) repo = ostree_repo_new (repo_file);
+              if (!ostree_repo_open (repo, NULL, &local_error))
+                {
+                  g_warning ("Failed to open child repo at %s: %s", helper_child_repo_path, local_error->message);
+
+                  /* Explicitly clearing the child_repo pointer closes any open FDs on the child_repo.
+                     This prevents EBUSY error failure during unmounting. */
+                  g_clear_object (&repo);
+                  flatpak_dir_cancel_pull (self, cancellable, helper_child_repo_path);
+                }
+              else
+                child_repo = g_steal_pointer (&repo);
+            }
+
+          /* Fallback */
           if (child_repo == NULL)
-            return FALSE;
+            {
+              /* We're pulling from a remote source, we do the network mirroring pull as a
+                 user and hand back the resulting data to the system-helper, that trusts us
+                 due to the GPG signatures in the repo */
+              child_repo = flatpak_dir_create_system_child_repo (self, &child_repo_lock, NULL, error);
+              if (child_repo == NULL)
+                return FALSE;
+
+              fallback = TRUE;
+            }
+          child_repo_path = g_file_get_path (ostree_repo_get_path (child_repo));
 
           flatpak_flags |= FLATPAK_PULL_FLAGS_SIDELOAD_EXTRA_DATA;
 
           /* Don’t resolve a rev or OstreeRepoFinderResult set early; the pull
            * code will do this. */
-          if (!flatpak_dir_pull (self, state, ref, opt_commit, NULL, subpaths,
-                                 child_repo,
-                                 flatpak_flags,
-                                 OSTREE_REPO_PULL_FLAGS_MIRROR,
-                                 progress, cancellable, error))
-            return FALSE;
-
-          if (!child_repo_ensure_summary (child_repo, state, cancellable, error))
-            return FALSE;
-
-          child_repo_path = g_file_get_path (ostree_repo_get_path (child_repo));
+          if (!flatpak_dir_pull (self, state, ref, opt_commit, NULL, subpaths, child_repo,
+                                 flatpak_flags, OSTREE_REPO_PULL_FLAGS_MIRROR,
+                                 progress, cancellable, error)
+              || !child_repo_ensure_summary (child_repo, state, cancellable, error))
+            {
+              if (!fallback)
+                {
+                  /* Explicitly clearing the child_repo pointer closes any open FDs on the child_repo.
+                     This prevents EBUSY error failure during unmounting. */
+                  g_clear_object (&child_repo);
+                  flatpak_dir_cancel_pull (self, cancellable, child_repo_path);
+                }
+              return FALSE;
+            }
         }
+
+      g_assert (child_repo_path != NULL);
 
       if (no_deploy)
         helper_flags |= FLATPAK_HELPER_DEPLOY_FLAGS_NO_DEPLOY;
