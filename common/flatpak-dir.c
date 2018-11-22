@@ -7850,9 +7850,13 @@ flatpak_dir_install (FlatpakDir          *self,
         }
       else
         {
-          /* If the system-helper can find bindfs on the system, we try to make a pull using the bindfs by
-             mounting repo/tmp/flatpak-cache-XXXXXX directory. If this operation is unsupported or failed,
-             the pull is then tried with the fallback codepath. */
+          /* If the system-helper can find bindfs on the system, it should return a child repo for us
+             to pull into. The child repo resides inside the system's repo/tmp/flatpak-cache-$ref-XXXXXX
+             directory. This directory is mounted using bindfs which enables us to pull into it. Once the pull
+             completes, the directory is unmounted before "Deploy" to avoid modifications and do a trusted pull
+             from this child repo to the system repo via hardlinking.
+
+             If this operation is unsupported or failed, the pull is then tried with the fallback codepath. */
 
           g_autofree gchar *helper_child_repo_path = NULL;
           g_autoptr(OstreeRepo) child_repo = NULL;
