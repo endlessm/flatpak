@@ -648,7 +648,7 @@ handle_get_child_repo_for_pull (FlatpakSystemHelper   *object,
                                                      "Failed to create OSTree child repo at %s", root_dir);
               return TRUE;
             }
-          g_autoptr(GFile) repo_file = ostree_repo_get_path (child_repo);
+          GFile *repo_file = ostree_repo_get_path (child_repo);
           child_repo_path = g_file_get_path (repo_file);
         }
 
