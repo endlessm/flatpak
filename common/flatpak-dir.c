@@ -7640,6 +7640,7 @@ flatpak_dir_user_check_parental_controls (FlatpakDir    *self,
   g_autoptr(AsApp) app = NULL;
   g_autoptr(GError) local_error = NULL;
 
+  /* The system helper implements its own checks via polkit. */
   if (!self->user)
     return TRUE;
 
@@ -7665,7 +7666,8 @@ flatpak_dir_user_check_parental_controls (FlatpakDir    *self,
 
       AsContentRating *rating = flatpak_appstream_get_latest_content_rating (app);
 
-      if (!epc_app_filter_is_app_installation_allowed (app_filter))
+      g_assert (self->user);
+      if (!epc_app_filter_is_user_installation_allowed (app_filter))
         return flatpak_fail (error, _("Current user is not allowed to install apps"));
       if (!flatpak_appstream_check_rating (rating, app_filter))
         return flatpak_fail (error,

@@ -1177,8 +1177,8 @@ authorize_deploy_add_polkit_details (const gchar    *installation,
     return FALSE;
 
   polkit_details_insert (details,
-                         "parental-controls-app-installation-allowed",
-                         epc_app_filter_is_app_installation_allowed (app_filter) ? "1" : "0");
+                         "parental-controls-repo-installation-allowed",
+                         epc_app_filter_is_system_installation_allowed (app_filter) ? "1" : "0");
 
   /* Check that this user is actually allowed to install this app. */
   if (app != NULL)
