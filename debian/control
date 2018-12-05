@@ -28,7 +28,7 @@ Build-Depends:
  libcap-dev,
  libdw-dev,
  libelf-dev,
- libeos-parental-controls-0-dev,
+ libeos-parental-controls-0-dev (>= 0+dev53.de16300bem1),
  libgirepository1.0-dev,
  libglib2.0-dev (>= 2.44),
  libgpgme-dev (>= 1.1.8),
