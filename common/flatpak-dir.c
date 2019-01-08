@@ -7992,7 +7992,7 @@ flatpak_dir_user_check_parental_controls (FlatpakDir    *self,
       if (!flatpak_appstream_check_rating (rating, app_filter))
         return flatpak_fail (error,
                              /* Translators: The placeholder is for an app ref. */
-                             _("%s has content too extreme for the current user"),
+                             _("Installing %s is not allowed by the policy set by your administrator"),
                              ref);
     }
   else
