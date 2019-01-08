@@ -65,6 +65,10 @@
             The remaining arguments are passed to the command that gets run in the sandboxed
             environment. See the <option>--file-forwarding</option> for handling of file arguments.
         </para>
+        <para>
+            flatpak will check the current user’s parental controls settings, and will refuse to
+            run an app if it is blacklisted for the current user.
+        </para>
 
     </refsect1>
 
