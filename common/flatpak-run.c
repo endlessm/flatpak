@@ -3103,7 +3103,7 @@ flatpak_run_app (const char     *app_ref,
 
   if (app_filter != NULL &&
       !epc_app_filter_is_flatpak_ref_allowed (app_filter, app_ref))
-    return flatpak_fail (error, "%s is blacklisted for the current user",
+    return flatpak_fail (error, _("%s is blacklisted for the current user"),
                          app_ref);
 
   /* Construct the bwrap context. */
