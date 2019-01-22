@@ -1935,6 +1935,24 @@ flatpak_transaction_update_metadata (FlatpakTransaction *self,
   /* These are potentially out of date now */
   g_hash_table_remove_all (priv->remote_states);
 
+  /* AppStream data is needed for parental controls decisions. Ignore the
+   * progress information for now. */
+  g_autoptr(FlatpakTransactionProgress) progress = flatpak_transaction_progress_new ();
+
+  for (i = 0; remotes[i] != NULL; i++)
+    {
+      const char *remote = remotes[i];
+      g_autoptr(GError) my_error = NULL;
+
+      g_debug ("Updating AppStream for %s", remote);
+      if (!flatpak_dir_update_appstream (priv->dir, remote, priv->default_arch,
+                                         NULL, progress->ostree_progress,
+                                         cancellable, &my_error))
+        g_message (_("Error updating AppStream for '%s': %s"), remote, my_error->message);
+    }
+
+  flatpak_transaction_progress_done (progress);
+
   return TRUE;
 }
 

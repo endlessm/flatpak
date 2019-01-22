@@ -1903,6 +1903,11 @@ flatpak_installation_install_full (FlatpakInstallation    *self,
   else
     ostree_progress = ostree_async_progress_new_and_connect (no_progress_cb, NULL);
 
+  /* AppStream data is needed for parental controls decisions. */
+  if (!flatpak_dir_update_appstream (dir_clone, remote_name, arch, NULL,
+                                     ostree_progress, cancellable, error))
+    goto out;
+
   if (!flatpak_dir_install (dir_clone,
                             (flags & FLATPAK_INSTALL_FLAGS_NO_PULL) != 0,
                             (flags & FLATPAK_INSTALL_FLAGS_NO_DEPLOY) != 0,
