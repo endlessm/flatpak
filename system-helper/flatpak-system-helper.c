@@ -1216,8 +1216,8 @@ authorize_deploy_add_polkit_details (const gchar           *installation,
   g_autoptr(AutoPolkitSubject) subject_process = NULL;
   gint subject_uid;
 
-  /* The ostree-metadata and appstream/* branches should not have any parental
-   * controls restrictions. */
+  /* The ostree-metadata and appstream/$arch branches should not have any
+   * parental controls restrictions. */
   if (!g_str_has_prefix (ref, "app/") && !g_str_has_prefix (ref, "runtime/"))
     return TRUE;
 
