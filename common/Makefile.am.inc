@@ -133,6 +133,7 @@ libflatpak_common_la_SOURCES = \
 libflatpak_common_la_CFLAGS = \
 	-DFLATPAK_COMPILATION \
 	$(AM_CFLAGS) \
+	$(APPSTREAM_GLIB_CFLAGS) \
 	$(BASE_CFLAGS) \
 	$(HIDDEN_VISIBILITY_CFLAGS) \
 	$(OSTREE_CFLAGS) \
