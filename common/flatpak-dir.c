@@ -2322,16 +2322,16 @@ add_appdata_to_deploy_data (GVariantBuilder *metadata_builder,
 }
 
 static GVariant *
-flatpak_dir_new_deploy_data (FlatpakDir *self,
-                             GFile      *deploy_dir,
-                             GVariant   *commit_metadata,
-                             GKeyFile   *metadata,
-                             const char *id,
-                             const char *origin,
-                             const char *commit,
-                             char      **subpaths,
-                             guint64     installed_size,
-                             char      **previous_ids)
+flatpak_dir_new_deploy_data (FlatpakDir         *self,
+                             GFile              *deploy_dir,
+                             GVariant           *commit_metadata,
+                             GKeyFile           *metadata,
+                             const char         *id,
+                             const char         *origin,
+                             const char         *commit,
+                             char              **subpaths,
+                             guint64             installed_size,
+                             const char * const *previous_ids)
 {
   char *empty_subpaths[] = {NULL};
   GVariantBuilder metadata_builder;
@@ -2366,7 +2366,7 @@ flatpak_dir_new_deploy_data (FlatpakDir *self,
 
   if (previous_ids)
     g_variant_builder_add (&metadata_builder, "{s@v}", "previous-ids",
-                           g_variant_new_variant (g_variant_new_strv ((const char * const *) previous_ids, -1)));
+                           g_variant_new_variant (g_variant_new_strv (previous_ids, -1)));
 
   add_appdata_to_deploy_data (&metadata_builder, deploy_dir, id);
 
