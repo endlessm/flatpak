@@ -8221,10 +8221,31 @@ flatpak_dir_user_check_parental_controls (FlatpakDir    *self,
 {
   g_autoptr(AsApp) app = NULL;
   g_autoptr(GError) local_error = NULL;
+  const char *on_session = g_getenv ("FLATPAK_SYSTEM_HELPER_ON_SESSION");
+  g_autoptr(GDBusConnection) dbus_connection = NULL;
 
   /* The system helper implements its own checks via polkit. */
   if (!self->user)
     return TRUE;
+
+  dbus_connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, &local_error);
+  if (dbus_connection == NULL)
+    {
+      if (on_session != NULL)
+        {
+          /* FIXME: Instead of skipping the parental controls check in the test
+           * environment, make a mock service for it.
+           * https://phabricator.endlessm.com/T25340 */
+          g_debug ("Skipping parental controls check for %s since the "
+                   "system bus is unavailable in the test environment", ref);
+          return TRUE;
+        }
+      else
+        {
+          g_propagate_error (error, g_steal_pointer (&local_error));
+          return FALSE;
+        }
+    }
 
   /* Get the AppStream data for this app, so we can check its content rating. */
   app = flatpak_dir_get_appstream_for_ref (self, remote_name, ref, NULL,
@@ -8242,7 +8263,7 @@ flatpak_dir_user_check_parental_controls (FlatpakDir    *self,
   if (app != NULL)
     {
       g_autoptr(EpcAppFilter) app_filter = NULL;
-      app_filter = epc_get_app_filter (NULL, getuid (), TRUE, cancellable, error);
+      app_filter = epc_get_app_filter (dbus_connection, getuid (), TRUE, cancellable, error);
       if (app_filter == NULL)
         return FALSE;
 
