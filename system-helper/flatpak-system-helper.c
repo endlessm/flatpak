@@ -1201,12 +1201,13 @@ handle_update_summary (FlatpakSystemHelper   *object,
  * allows authorization decisions to be made based on them, without hard-coding
  * a policy here. */
 static gboolean
-authorize_deploy_add_polkit_details (const gchar    *installation,
-                                     const gchar    *ref,
-                                     const gchar    *origin,
-                                     PolkitSubject  *subject,
-                                     PolkitDetails  *details,
-                                     GError        **error)
+authorize_deploy_add_polkit_details (const gchar           *installation,
+                                     GDBusMethodInvocation *invocation,
+                                     const gchar           *ref,
+                                     const gchar           *origin,
+                                     PolkitSubject         *subject,
+                                     PolkitDetails         *details,
+                                     GError               **error)
 {
   g_autoptr(GError) local_error = NULL;
   g_autoptr(FlatpakDir) system = NULL;
@@ -1222,7 +1223,7 @@ authorize_deploy_add_polkit_details (const gchar    *installation,
 
   g_debug ("Getting parental controls details for %s from %s", ref, origin);
 
-  system = dir_get_system (installation, error);
+  system = dir_get_system (installation, get_sender_pid (invocation), error);
   if (system == NULL)
     return FALSE;
 
@@ -1395,7 +1396,7 @@ flatpak_authorize_method_handler (GDBusInterfaceSkeleton *interface,
           gboolean is_app, is_install;
           g_autoptr(GError) local_error = NULL;
 
-          if (!authorize_deploy_add_polkit_details (installation, ref, origin,
+          if (!authorize_deploy_add_polkit_details (installation, invocation, ref, origin,
                                                     subject, details, &local_error))
             {
               g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
@@ -1489,7 +1490,7 @@ flatpak_authorize_method_handler (GDBusInterfaceSkeleton *interface,
           return FALSE;
         }
 
-      if (!authorize_deploy_add_polkit_details (installation, ref, remote,
+      if (!authorize_deploy_add_polkit_details (installation, invocation, ref, remote,
                                                 subject, details, &local_error))
         {
           g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));

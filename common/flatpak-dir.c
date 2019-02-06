@@ -2322,16 +2322,16 @@ add_appdata_to_deploy_data (GVariantBuilder *metadata_builder,
 }
 
 static GVariant *
-flatpak_dir_new_deploy_data (FlatpakDir *self,
-                             GFile      *deploy_dir,
-                             GVariant   *commit_metadata,
-                             GKeyFile   *metadata,
-                             const char *id,
-                             const char *origin,
-                             const char *commit,
-                             char      **subpaths,
-                             guint64     installed_size,
-                             char      **previous_ids)
+flatpak_dir_new_deploy_data (FlatpakDir         *self,
+                             GFile              *deploy_dir,
+                             GVariant           *commit_metadata,
+                             GKeyFile           *metadata,
+                             const char         *id,
+                             const char         *origin,
+                             const char         *commit,
+                             char              **subpaths,
+                             guint64             installed_size,
+                             const char * const *previous_ids)
 {
   char *empty_subpaths[] = {NULL};
   GVariantBuilder metadata_builder;
@@ -2366,7 +2366,7 @@ flatpak_dir_new_deploy_data (FlatpakDir *self,
 
   if (previous_ids)
     g_variant_builder_add (&metadata_builder, "{s@v}", "previous-ids",
-                           g_variant_new_variant (g_variant_new_strv ((const char * const *) previous_ids, -1)));
+                           g_variant_new_variant (g_variant_new_strv (previous_ids, -1)));
 
   add_appdata_to_deploy_data (&metadata_builder, deploy_dir, id);
 
@@ -7959,10 +7959,31 @@ flatpak_dir_user_check_parental_controls (FlatpakDir    *self,
 {
   g_autoptr(AsApp) app = NULL;
   g_autoptr(GError) local_error = NULL;
+  const char *on_session = g_getenv ("FLATPAK_SYSTEM_HELPER_ON_SESSION");
+  g_autoptr(GDBusConnection) dbus_connection = NULL;
 
   /* The system helper implements its own checks via polkit. */
   if (!self->user)
     return TRUE;
+
+  dbus_connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, &local_error);
+  if (dbus_connection == NULL)
+    {
+      if (on_session != NULL)
+        {
+          /* FIXME: Instead of skipping the parental controls check in the test
+           * environment, make a mock service for it.
+           * https://phabricator.endlessm.com/T25340 */
+          g_debug ("Skipping parental controls check for %s since the "
+                   "system bus is unavailable in the test environment", ref);
+          return TRUE;
+        }
+      else
+        {
+          g_propagate_error (error, g_steal_pointer (&local_error));
+          return FALSE;
+        }
+    }
 
   /* Get the AppStream data for this app, so we can check its content rating. */
   app = flatpak_dir_get_appstream_for_ref (self, remote_name, ref, NULL,
@@ -7980,7 +8001,7 @@ flatpak_dir_user_check_parental_controls (FlatpakDir    *self,
   if (app != NULL)
     {
       g_autoptr(EpcAppFilter) app_filter = NULL;
-      app_filter = epc_get_app_filter (NULL, getuid (), TRUE, cancellable, error);
+      app_filter = epc_get_app_filter (dbus_connection, getuid (), TRUE, cancellable, error);
       if (app_filter == NULL)
         return FALSE;
 

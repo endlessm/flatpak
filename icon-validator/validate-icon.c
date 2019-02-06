@@ -132,9 +132,17 @@ rerun_in_sandbox (const char *arg_width,
   g_autofree char *err = NULL;
   int status;
   g_autoptr(GError) error = NULL;
-  char validate_icon[256];
+  char validate_icon[PATH_MAX + 1];
+  ssize_t symlink_size;
 
-  readlink ("/proc/self/exe", validate_icon, 256);
+  symlink_size = readlink ("/proc/self/exe", validate_icon, sizeof (validate_icon) - 1);
+  if (symlink_size < 0)
+    {
+      g_printerr ("Error: failed to read /proc/self/exe\n");
+      return 1;
+    }
+
+  validate_icon[symlink_size] = 0;
 
   add_args (args,
             flatpak_get_bwrap (),
@@ -194,7 +202,7 @@ rerun_in_sandbox (const char *arg_width,
     g_debug ("Icon validation: Spawning %s", cmdline);
   }
 
-  if (!g_spawn_sync (NULL, (char **)args->pdata, NULL, 0, NULL, NULL, NULL, &err, &status, &error))
+  if (!g_spawn_sync (NULL, (char **)args->pdata, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, &err, &status, &error))
     {
       g_debug ("Icon validation: %s", error->message);
       return 1;
