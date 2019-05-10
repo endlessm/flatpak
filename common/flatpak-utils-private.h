@@ -812,6 +812,15 @@ gboolean flatpak_check_required_version (const char *ref,
 int flatpak_levenshtein_distance (const char *s,
                                   const char *t);
 
+gboolean flatpak_repo_resolve_rev (OstreeRepo    *repo,
+                                   const char    *collection_id, /* nullable */
+                                   const char    *remote_name, /* nullable */
+                                   const char    *ref_name,
+                                   gboolean       allow_noent,
+                                   char         **out_rev,
+                                   GCancellable  *cancellable,
+                                   GError       **error);
+
 #define FLATPAK_MESSAGE_ID "c7b39b1e006b464599465e105b361485"
 
 #endif /* __FLATPAK_UTILS_H__ */
