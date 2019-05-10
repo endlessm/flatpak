@@ -321,11 +321,11 @@ flatpak_remote_state_lookup_ref (FlatpakRemoteState *self,
       if (!flatpak_summary_lookup_ref (self->summary, self->collection_id, ref, out_checksum, out_variant))
         {
           if (self->collection_id != NULL)
-            return flatpak_fail_error (error, FLATPAK_ERROR_INVALID_DATA,
+            return flatpak_fail_error (error, FLATPAK_ERROR_REF_NOT_FOUND,
                                        _("No such ref (%s, %s) in remote %s"),
                                        self->collection_id, ref, self->remote_name);
           else
-            return flatpak_fail_error (error, FLATPAK_ERROR_INVALID_DATA,
+            return flatpak_fail_error (error, FLATPAK_ERROR_REF_NOT_FOUND,
                                        _("No such ref '%s' in remote %s"),
                                        ref, self->remote_name);
         }
@@ -413,9 +413,9 @@ flatpak_remote_state_lookup_cache (FlatpakRemoteState *self,
 
   if (!flatpak_variant_bsearch_str (cache, ref, &pos))
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                   _("No entry for %s in remote '%s' summary flatpak cache "), ref, self->remote_name);
-      return FALSE;
+      return flatpak_fail_error (error, FLATPAK_ERROR_REF_NOT_FOUND,
+                                 _("No entry for %s in remote '%s' summary flatpak cache "),
+                                 ref, self->remote_name);
     }
 
   refdata = g_variant_get_child_value (cache, pos);
@@ -3283,7 +3283,7 @@ flatpak_dir_find_latest_rev (FlatpakDir               *self,
 
       if (latest_rev == NULL)
         {
-          return flatpak_fail_error (error, FLATPAK_ERROR_INVALID_DATA,
+          return flatpak_fail_error (error, FLATPAK_ERROR_REF_NOT_FOUND,
                                      _("No such ref (%s, %s) in remote %s or elsewhere"),
                                      collection_ref.collection_id, collection_ref.ref_name,
                                      state->remote_name);
@@ -3300,7 +3300,7 @@ flatpak_dir_find_latest_rev (FlatpakDir               *self,
       if (!flatpak_remote_state_lookup_ref (state, ref, &latest_rev, NULL, error))
         return FALSE;
       if (latest_rev == NULL)
-        return flatpak_fail_error (error, FLATPAK_ERROR_INVALID_DATA,
+        return flatpak_fail_error (error, FLATPAK_ERROR_REF_NOT_FOUND,
                                    _("Couldn't find latest checksum for ref %s in remote %s"),
                                    ref, state->remote_name);
 
@@ -3496,7 +3496,9 @@ flatpak_dir_do_resolve_p2p_refs (FlatpakDir             *self,
     return FALSE;
 
   if (results[0] == NULL)
-    return flatpak_fail (error, _("No remotes found which provide these refs: [%s]"), refs_str->str);
+    return flatpak_fail_error (error, FLATPAK_ERROR_REF_NOT_FOUND,
+                               _("No remotes found which provide these refs: [%s]"),
+                               refs_str->str);
 
   /* Drop from the results all ops that are no-op updates */
   for (i = 0; datas[i] != NULL; i++)
@@ -4735,7 +4737,7 @@ flatpak_dir_mirror_oci (FlatpakDir          *self,
   if (!flatpak_remote_state_lookup_ref (state, ref, &latest_rev, &summary_element, error))
     return FALSE;
   if (latest_rev == NULL)
-    return flatpak_fail_error (error, FLATPAK_ERROR_INVALID_DATA,
+    return flatpak_fail_error (error, FLATPAK_ERROR_REF_NOT_FOUND,
                                _("Couldn't find latest checksum for ref %s in remote %s"),
                                ref, state->remote_name);
 
@@ -4806,7 +4808,7 @@ flatpak_dir_pull_oci (FlatpakDir          *self,
   if (!flatpak_remote_state_lookup_ref (state, ref, &latest_rev, &summary_element, error))
     return FALSE;
   if (latest_rev == NULL)
-    return flatpak_fail_error (error, FLATPAK_ERROR_INVALID_DATA,
+    return flatpak_fail_error (error, FLATPAK_ERROR_REF_NOT_FOUND,
                                _("Couldn't find latest checksum for ref %s in remote %s"),
                                ref, state->remote_name);
 
@@ -5040,7 +5042,7 @@ flatpak_dir_pull (FlatpakDir                           *self,
 
           if (rev == NULL)
             {
-              g_set_error (error, FLATPAK_ERROR, FLATPAK_ERROR_INVALID_DATA, _("No such ref (%s, %s) in remote %s or elsewhere"),
+              g_set_error (error, FLATPAK_ERROR, FLATPAK_ERROR_REF_NOT_FOUND, _("No such ref (%s, %s) in remote %s or elsewhere"),
                            collection_ref.collection_id, collection_ref.ref_name, state->remote_name);
               goto out;
             }
@@ -5051,7 +5053,7 @@ flatpak_dir_pull (FlatpakDir                           *self,
             goto out;
           if (rev == NULL)
             {
-              flatpak_fail_error (error, FLATPAK_ERROR_INVALID_DATA,
+              flatpak_fail_error (error, FLATPAK_ERROR_REF_NOT_FOUND,
                                   _("Couldn't find latest checksum for ref %s in remote %s"),
                                   ref, state->remote_name);
               goto out;
@@ -5336,7 +5338,7 @@ flatpak_dir_pull_untrusted_local (FlatpakDir          *self,
                                        NULL,
                                        ref,
                                        &checksum, NULL))
-        return flatpak_fail_error (error, FLATPAK_ERROR_INVALID_DATA, _("No such ref '%s' in remote %s"),
+        return flatpak_fail_error (error, FLATPAK_ERROR_REF_NOT_FOUND, _("No such ref '%s' in remote %s"),
                                    ref, remote_name);
     }
   else
@@ -13221,7 +13223,7 @@ flatpak_dir_fetch_remote_commit (FlatpakDir   *self,
         return NULL;
       if (latest_commit == NULL)
         {
-          flatpak_fail_error (error, FLATPAK_ERROR_INVALID_DATA,
+          flatpak_fail_error (error, FLATPAK_ERROR_REF_NOT_FOUND,
                               _("Couldn't find latest checksum for ref %s in remote %s"),
                               ref, state->remote_name);
           return NULL;
