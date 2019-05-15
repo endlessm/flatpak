@@ -261,6 +261,7 @@ fi
 AM_CONDITIONAL(BUILD_SYSTEM_HELPER, test x$enable_system_helper = xyes)
 
 PKG_CHECK_MODULES(FUSE, fuse >= 2.9.2)
+PKG_CHECK_MODULES(LIBSECRET, libsecret-1 >= 0.16)
 
 AC_ARG_ENABLE([xauth],
               AC_HELP_STRING([--disable-xauth],

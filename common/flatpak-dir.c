@@ -43,6 +43,7 @@
 #include <ostree.h>
 #include <appstream-glib.h>
 #include <libeos-parental-controls/app-filter.h>
+#include <libsecret/secret.h>
 
 #include "flatpak-dir-private.h"
 #include "flatpak-utils-private.h"
@@ -72,6 +73,9 @@
 #define SYSTEM_DIR_DEFAULT_DISPLAY_NAME _("Default system installation")
 #define SYSTEM_DIR_DEFAULT_STORAGE_TYPE FLATPAK_DIR_STORAGE_TYPE_DEFAULT
 #define SYSTEM_DIR_DEFAULT_PRIORITY 0
+
+#define PRODUCT_SERIAL_PATH "/sys/devices/virtual/dmi/id/product_serial"
+#define BEARER_TOKEN_MAX_SIZE 2048
 
 static FlatpakOciRegistry *flatpak_dir_create_system_child_oci_registry (FlatpakDir   *self,
                                                                          GLnxLockFile *file_lock,
@@ -4018,19 +4022,231 @@ repo_get_remote_collection_id (OstreeRepo *repo,
   return TRUE;
 }
 
+static const SecretSchema *
+get_api_server_access_token_schema (void)
+{
+    static const SecretSchema schema = {
+        "com.endlessm.HackAccountToken", SECRET_SCHEMA_NONE,
+        {
+            {  "serial", SECRET_SCHEMA_ATTRIBUTE_STRING },
+            {  "NULL", 0 },
+        }
+    };
+    return &schema;
+}
+
+static char *
+get_api_server_access_token (GCancellable  *cancellable,
+                             GError       **error)
+{
+  g_autofree char *product_serial = NULL;
+  g_autoptr(GFile) product_serial_file = NULL;
+  g_autoptr(GMainContextPopDefault) context = NULL;
+  g_autoptr(GAsyncResult) lookup_result = NULL;
+
+  product_serial_file = g_file_new_for_path (PRODUCT_SERIAL_PATH);
+  if (!g_file_load_contents (product_serial_file,
+                             cancellable,
+                             &product_serial,
+                             NULL, NULL,
+                             error))
+    return NULL;
+
+  g_strchomp (product_serial);
+
+  context = flatpak_main_context_new_default ();
+
+  secret_password_lookup (get_api_server_access_token_schema (),
+                          cancellable, async_result_cb, &lookup_result,
+                          "serial", product_serial,
+                          NULL);
+
+  while (lookup_result == NULL)
+    g_main_context_iteration (context, TRUE);
+
+  return secret_password_lookup_finish (lookup_result, error);
+}
+
+static char *
+get_repo_bearer_token (FlatpakDir    *dir,
+                       const char    *remote_url,
+                       const char    *api_server_url,
+                       const char    *ref_to_fetch,
+                       GCancellable  *cancellable,
+                       GError       **error)
+{
+  g_autofree char *access_token = NULL;
+  g_autofree char *bearer_header = NULL;
+  g_autofree char *token_url = NULL;
+  g_autofree char *token_url_checksum = NULL;
+  g_autofree char *token_cache_filename = NULL;
+  char *token_buffer = NULL;
+  gsize token_size;
+  g_autoptr(GFile) cache_dir = NULL;
+  g_autoptr(GFile) token_cache_file = NULL;
+  g_autoptr(GFileInfo) token_cache_file_info = NULL;
+  GTimeVal token_cache_mtime;
+  GTimeVal current_time;
+  g_autoptr(GMainContext) context = NULL;
+  g_autoptr(SoupRequestHTTP) request = NULL;
+  g_autoptr(SoupMessage) http_message = NULL;
+  g_autoptr(GAsyncResult) request_send_result = NULL;
+  g_autoptr(GInputStream) request_stream = NULL;
+  g_autoptr(GAsyncResult) request_read_all_result = NULL;
+
+  if (api_server_url != NULL)
+    {
+      access_token = get_api_server_access_token (cancellable, error);
+      if (!access_token)
+        {
+          g_prefix_error (error, "Unable to get API server access token: ");
+          return NULL;
+        }
+
+      token_url = g_strconcat (api_server_url,
+                               "/token?ref=",
+                               ref_to_fetch,
+                               "&repo_url=",
+                               remote_url,
+                               NULL);
+
+      token_url_checksum = g_compute_checksum_for_string (G_CHECKSUM_SHA1,
+                                                          token_url,
+                                                          strlen (token_url));
+
+      cache_dir = flatpak_ensure_system_user_cache_dir_location (error);
+      if (!cache_dir)
+        {
+          g_prefix_error (error, "Unable to get system cache dir: ");
+          return NULL;
+        }
+
+      token_cache_filename = g_strconcat (g_file_get_path (cache_dir),
+                                          "/api-server-token-",
+                                          token_url_checksum,
+                                          NULL);
+      token_cache_file = g_file_new_for_path (token_cache_filename);
+      token_cache_file_info = g_file_query_info (token_cache_file,
+                                                 G_FILE_ATTRIBUTE_TIME_MODIFIED,
+                                                 G_FILE_QUERY_INFO_NONE,
+                                                 cancellable, NULL);
+      g_file_info_get_modification_time (token_cache_file_info, &token_cache_mtime);
+      g_get_current_time (&current_time);
+
+      /* Tokens expires in one hour, we won't reuse tokens that are close
+       * to expire, that's why we check for at most 3400 seconds old tokens */
+      if (g_file_query_exists (token_cache_file, cancellable) &&
+          current_time.tv_sec - token_cache_mtime.tv_sec < 3400)
+        {
+          if (!g_file_load_contents (token_cache_file,
+                                     cancellable,
+                                     &token_buffer,
+                                     NULL, NULL,
+                                     error))
+            {
+              g_warning ("Unable to read token cache file %s: %s",
+                         token_cache_filename,
+                         (*error)->message);
+              g_clear_pointer (&token_buffer, g_free);
+            }
+        }
+
+      if (token_buffer)
+        return token_buffer;
+
+      ensure_soup_session (dir);
+      request = soup_session_request_http (dir->soup_session, "GET",
+                                           token_url, error);
+      if (!request)
+        {
+          g_prefix_error (error, "Unable to create repo token Soup request: ");
+          return NULL;
+        }
+
+      http_message = soup_request_http_get_message (request);
+      bearer_header = g_strconcat ("Bearer: ", access_token, NULL);
+      soup_message_headers_replace (http_message->request_headers, "Authorization", bearer_header);
+
+      context = flatpak_main_context_new_default ();
+      soup_request_send_async (SOUP_REQUEST (request), cancellable,
+                               async_result_cb, &request_send_result);
+
+      while (request_send_result == NULL)
+        g_main_context_iteration (context, TRUE);
+
+      request_stream = soup_request_send_finish (SOUP_REQUEST (request),
+                                                 request_send_result,
+                                                 error);
+      if (!request_stream)
+        {
+          g_prefix_error (error, "Unable to create repo token Soup request: ");
+          return NULL;
+        }
+
+      if (!SOUP_STATUS_IS_SUCCESSFUL (http_message->status_code))
+        {
+          *error = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED,
+                                "Token server returned status %u: %s",
+                                http_message->status_code,
+                                soup_status_get_phrase (http_message->status_code));
+          return NULL;
+        }
+
+      token_buffer = g_malloc (BEARER_TOKEN_MAX_SIZE);
+      g_input_stream_read_all_async (request_stream,
+                                     token_buffer,
+                                     BEARER_TOKEN_MAX_SIZE,
+                                     0,
+                                     cancellable,
+                                     async_result_cb,
+                                     &request_read_all_result);
+
+      while (request_read_all_result == NULL)
+        g_main_context_iteration (context, TRUE);
+
+      if (!g_input_stream_read_all_finish (request_stream,
+                                           request_read_all_result,
+                                           &token_size,
+                                           error))
+        {
+          g_prefix_error (error, "Unable to read token from server: ");
+          g_clear_pointer (&token_buffer, g_free);
+          return NULL;
+        }
+
+      if (!g_file_replace_contents(token_cache_file, token_buffer, token_size,
+                                   NULL, FALSE, G_FILE_CREATE_NONE, NULL,
+                                   cancellable, error))
+        g_warning ("Unable to write token to cache file %s: %s",
+                   token_cache_filename,
+                   (*error)->message);
+
+      return token_buffer;
+    }
+
+  return NULL;
+}
+
 /* Get options for the OSTree pull operation which can be shared between
  * collection-based and normal pulls. Update @builder in place. */
 static void
 get_common_pull_options (GVariantBuilder     *builder,
+                         FlatpakDir          *dir,
+                         const char          *remote_url,
+                         const char          *api_server_url,
                          const char          *ref_to_fetch,
                          const gchar * const *dirs_to_pull,
                          const char          *current_local_checksum,
                          gboolean             force_disable_deltas,
                          OstreeRepoPullFlags  flags,
-                         OstreeAsyncProgress *progress)
+                         OstreeAsyncProgress *progress,
+                         GCancellable        *cancellable)
 {
   guint32 update_freq = 0;
   GVariantBuilder hdr_builder;
+  g_autofree char *bearer_token = NULL;
+  g_autofree char *bearer_header = NULL;
+  g_autoptr(GError) bearer_error = NULL;
 
   if (dirs_to_pull)
     {
@@ -4056,6 +4272,18 @@ get_common_pull_options (GVariantBuilder     *builder,
   g_variant_builder_add (&hdr_builder, "(ss)", "Flatpak-Ref", ref_to_fetch);
   if (current_local_checksum)
     g_variant_builder_add (&hdr_builder, "(ss)", "Flatpak-Upgrade-From", current_local_checksum);
+
+  bearer_token = get_repo_bearer_token (dir, remote_url, api_server_url,
+                                        ref_to_fetch, cancellable, &bearer_error);
+  if (bearer_token != NULL)
+    {
+      bearer_header = g_strconcat ("Bearer: ", bearer_token, NULL);
+      g_variant_builder_add (&hdr_builder, "(ss)", "Authorization", bearer_header);
+    }
+  else if (bearer_error != NULL)
+    g_warning ("Unable to get repo token for %s: %s",
+               ref_to_fetch, bearer_error->message);
+
   g_variant_builder_add (builder, "{s@v}", "http-headers",
                          g_variant_new_variant (g_variant_builder_end (&hdr_builder)));
   g_variant_builder_add (builder, "{s@v}", "append-user-agent",
@@ -4087,7 +4315,8 @@ translate_ostree_repo_pull_errors (GError **error)
 }
 
 static gboolean
-repo_pull (OstreeRepo                           *self,
+repo_pull (FlatpakDir                           *self,
+           OstreeRepo                           *repo,
            const char                           *remote_name,
            const char                          **dirs_to_pull,
            const char                           *ref_to_fetch,
@@ -4120,14 +4349,14 @@ repo_pull (OstreeRepo                           *self,
   flags |= OSTREE_REPO_PULL_FLAGS_BAREUSERONLY_FILES;
 
   remote_and_branch = g_strdup_printf ("%s:%s", remote_name, ref_to_fetch);
-  if (!ostree_repo_resolve_rev (self, remote_and_branch, TRUE, &current_checksum, error))
+  if (!ostree_repo_resolve_rev (repo, remote_and_branch, TRUE, &current_checksum, error))
     return FALSE;
 
   if (current_checksum != NULL &&
-      !ostree_repo_load_commit (self, current_checksum, &old_commit, NULL, error))
+      !ostree_repo_load_commit (repo, current_checksum, &old_commit, NULL, error))
     return FALSE;
 
-  if (!repo_get_remote_collection_id (self, remote_name, &collection_id, NULL))
+  if (!repo_get_remote_collection_id (repo, remote_name, &collection_id, NULL))
     g_clear_pointer (&collection_id, g_free);
 
   if (collection_id != NULL)
@@ -4174,15 +4403,18 @@ repo_pull (OstreeRepo                           *self,
 
       /* Pull options */
       g_variant_builder_init (&pull_builder, G_VARIANT_TYPE ("a{sv}"));
-      get_common_pull_options (&pull_builder, ref_to_fetch, dirs_to_pull, current_checksum,
-                               force_disable_deltas, flags, progress);
+
+      /* TODO: Find a way to retrieve different pull options per remote */
+      get_common_pull_options (&pull_builder, self, NULL, NULL, ref_to_fetch,
+                               dirs_to_pull, current_checksum, force_disable_deltas,
+                               flags, progress, cancellable);
       pull_options = g_variant_ref_sink (g_variant_builder_end (&pull_builder));
 
       context = flatpak_main_context_new_default ();
 
       if (results_to_fetch == NULL)
         {
-          ostree_repo_find_remotes_async (self, (const OstreeCollectionRef * const *) collection_refs_to_fetch,
+          ostree_repo_find_remotes_async (repo, (const OstreeCollectionRef * const *) collection_refs_to_fetch,
                                           find_options,
                                           NULL /* default finders */, progress, cancellable,
                                           async_result_cb, &find_result);
@@ -4190,13 +4422,13 @@ repo_pull (OstreeRepo                           *self,
           while (find_result == NULL)
             g_main_context_iteration (context, TRUE);
 
-          results = ostree_repo_find_remotes_finish (self, find_result, error);
+          results = ostree_repo_find_remotes_finish (repo, find_result, error);
           results_to_fetch = (const OstreeRepoFinderResult * const *) results;
         }
 
       if (results_to_fetch != NULL)
         {
-          ostree_repo_pull_from_remotes_async (self, results_to_fetch,
+          ostree_repo_pull_from_remotes_async (repo, results_to_fetch,
                                                pull_options, progress,
                                                cancellable, async_result_cb,
                                                &pull_result);
@@ -4204,7 +4436,7 @@ repo_pull (OstreeRepo                           *self,
           while (pull_result == NULL)
             g_main_context_iteration (context, TRUE);
 
-          res = ostree_repo_pull_from_remotes_finish (self, pull_result, error);
+          res = ostree_repo_pull_from_remotes_finish (repo, pull_result, error);
         }
       else
         res = FALSE;
@@ -4223,12 +4455,18 @@ repo_pull (OstreeRepo                           *self,
     {
       GVariantBuilder builder;
       g_autoptr(GVariant) options = NULL;
+      g_autofree char *api_server_url = NULL;
+      g_autofree char *remote_url = NULL;
       const char *refs_to_fetch[2];
 
       /* Pull options */
       g_variant_builder_init (&builder, G_VARIANT_TYPE ("a{sv}"));
-      get_common_pull_options (&builder, ref_to_fetch, dirs_to_pull, current_checksum,
-                               force_disable_deltas, flags, progress);
+
+      api_server_url = flatpak_dir_get_remote_api_server_url (self, remote_name);
+      ostree_repo_remote_get_url (repo, remote_name, &remote_url, error);
+      get_common_pull_options (&builder, self, remote_url, api_server_url, ref_to_fetch,
+                               dirs_to_pull, current_checksum, force_disable_deltas,
+                               flags, progress, cancellable);
 
       refs_to_fetch[0] = ref_to_fetch;
       refs_to_fetch[1] = NULL;
@@ -4242,7 +4480,7 @@ repo_pull (OstreeRepo                           *self,
 
       options = g_variant_ref_sink (g_variant_builder_end (&builder));
 
-      if (!ostree_repo_pull_with_options (self, remote_name, options,
+      if (!ostree_repo_pull_with_options (repo, remote_name, options,
                                           progress, cancellable, error))
         return translate_ostree_repo_pull_errors (error);
     }
@@ -4253,7 +4491,7 @@ repo_pull (OstreeRepo                           *self,
       guint64 old_timestamp;
       guint64 new_timestamp;
 
-      if (!ostree_repo_load_commit (self, rev_to_fetch, &new_commit, NULL, error))
+      if (!ostree_repo_load_commit (repo, rev_to_fetch, &new_commit, NULL, error))
         return FALSE;
 
       old_timestamp = ostree_commit_get_timestamp (old_commit);
@@ -4322,7 +4560,7 @@ flatpak_dir_setup_extra_data (FlatpakDir                           *self,
       /* Pull the commits (and only the commits) to check for extra data
        * again. Here we don't pass the progress because we don't want any
        * reports coming out of it. */
-      if (!repo_pull (repo, repository,
+      if (!repo_pull (self, repo, repository,
                       NULL,
                       ref,
                       rev,
@@ -4978,7 +5216,7 @@ flatpak_dir_pull (FlatpakDir                           *self,
   remote_and_branch = g_strdup_printf ("%s:%s", state->remote_name, ref);
   ostree_repo_resolve_rev (repo, remote_and_branch, TRUE, &current_checksum, NULL);
 
-  if (!repo_pull (repo, state->remote_name,
+  if (!repo_pull (self, repo, state->remote_name,
                   subdirs_arg ? (const char **) subdirs_arg->pdata : NULL,
                   ref, rev, results, flatpak_flags, flags,
                   progress,
@@ -11649,6 +11887,19 @@ flatpak_dir_get_remote_default_branch (FlatpakDir *self,
   return NULL;
 }
 
+char *
+flatpak_dir_get_remote_api_server_url (FlatpakDir *self,
+                                                const char *remote_name)
+{
+  GKeyFile *config = flatpak_dir_get_repo_config (self);
+  g_autofree char *group = get_group (remote_name);
+
+  if (config)
+    return g_key_file_get_string (config, group, "xa.api-server-url", NULL);
+
+  return NULL;
+}
+
 int
 flatpak_dir_get_remote_prio (FlatpakDir *self,
                              const char *remote_name)
@@ -12848,6 +13099,7 @@ flatpak_dir_update_remote_configuration_for_state (FlatpakDir         *self,
     "xa.homepage",
     "xa.icon",
     "xa.default-branch",
+    "xa.api-server-url",
     "xa.gpg-keys",
     "xa.redirect-url",
     OSTREE_META_KEY_DEPLOY_COLLECTION_ID,
