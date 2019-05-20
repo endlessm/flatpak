@@ -66,6 +66,7 @@ GType flatpak_deploy_get_type (void);
 #define FLATPAK_REPO_URL_KEY "Url"
 #define FLATPAK_REPO_TITLE_KEY "Title"
 #define FLATPAK_REPO_DEFAULT_BRANCH_KEY "DefaultBranch"
+#define FLATPAK_REPO_API_SERVER_URL_KEY "ApiServerURL"
 #define FLATPAK_REPO_GPGKEY_KEY "GPGKey"
 #define FLATPAK_REPO_NODEPS_KEY "NoDeps"
 #define FLATPAK_REPO_COMMENT_KEY "Comment"
@@ -835,7 +836,7 @@ gboolean   flatpak_dir_get_remote_oci (FlatpakDir *self,
 char      *flatpak_dir_get_remote_default_branch (FlatpakDir *self,
                                                   const char *remote_name);
 char      *flatpak_dir_get_remote_api_server_url (FlatpakDir *self,
-                                                           const char *remote_name);
+                                                  const char *remote_name);
 int        flatpak_dir_get_remote_prio (FlatpakDir *self,
                                         const char *remote_name);
 gboolean   flatpak_dir_get_remote_noenumerate (FlatpakDir *self,

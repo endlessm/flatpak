@@ -2782,6 +2782,26 @@ flatpak_repo_set_default_branch (OstreeRepo *repo,
 }
 
 gboolean
+flatpak_repo_set_api_server_url (OstreeRepo *repo,
+                                 const char *api_server_url,
+                                 GError    **error)
+{
+  g_autoptr(GKeyFile) config = NULL;
+
+  config = ostree_repo_copy_config (repo);
+
+  if (api_server_url)
+    g_key_file_set_string (config, "flatpak", "api-server-url", api_server_url);
+  else
+    g_key_file_remove_key (config, "flatpak", "api-server-url", NULL);
+
+  if (!ostree_repo_write_config (repo, config, error))
+    return FALSE;
+
+  return TRUE;
+}
+
+gboolean
 flatpak_repo_set_collection_id (OstreeRepo *repo,
                                 const char *collection_id,
                                 GError    **error)
@@ -3139,6 +3159,7 @@ flatpak_repo_update (OstreeRepo   *repo,
   g_autofree char *icon = NULL;
   g_autofree char *redirect_url = NULL;
   g_autofree char *default_branch = NULL;
+  g_autofree char *api_server_url = NULL;
   g_autofree char *gpg_keys = NULL;
   g_autoptr(GVariant) old_summary = NULL;
   g_autoptr(GVariant) new_summary = NULL;
@@ -3165,6 +3186,7 @@ flatpak_repo_update (OstreeRepo   *repo,
       homepage = g_key_file_get_string (config, "flatpak", "homepage", NULL);
       icon = g_key_file_get_string (config, "flatpak", "icon", NULL);
       default_branch = g_key_file_get_string (config, "flatpak", "default-branch", NULL);
+      api_server_url = g_key_file_get_string (config, "flatpak", "api-server-url", NULL);
       gpg_keys = g_key_file_get_string (config, "flatpak", "gpg-keys", NULL);
       redirect_url = g_key_file_get_string (config, "flatpak", "redirect-url", NULL);
       deploy_collection_id = g_key_file_get_boolean (config, "flatpak", "deploy-collection-id", NULL);
@@ -3199,6 +3221,10 @@ flatpak_repo_update (OstreeRepo   *repo,
   if (default_branch)
     g_variant_builder_add (&builder, "{sv}", "xa.default-branch",
                            g_variant_new_string (default_branch));
+
+  if (api_server_url)
+    g_variant_builder_add (&builder, "{sv}", "xa.api-server-url",
+                           g_variant_new_string (api_server_url));
 
   if (deploy_collection_id && collection_id != NULL)
     g_variant_builder_add (&builder, "{sv}", OSTREE_META_KEY_DEPLOY_COLLECTION_ID,

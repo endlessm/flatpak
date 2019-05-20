@@ -421,6 +421,9 @@ gboolean flatpak_repo_set_redirect_url (OstreeRepo *repo,
 gboolean flatpak_repo_set_default_branch (OstreeRepo *repo,
                                           const char *branch,
                                           GError    **error);
+gboolean flatpak_repo_set_api_server_url (OstreeRepo *repo,
+                                          const char *api_server_url,
+                                          GError    **error);
 gboolean flatpak_repo_set_collection_id (OstreeRepo *repo,
                                          const char *collection_id,
                                          GError    **error);

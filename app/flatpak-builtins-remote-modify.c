@@ -49,6 +49,7 @@ static char *opt_description;
 static char *opt_homepage;
 static char *opt_icon;
 static char *opt_default_branch;
+static char *opt_api_server_url;
 static char *opt_url;
 static char *opt_collection_id = NULL;
 static char **opt_gpg_import;
@@ -75,6 +76,7 @@ static GOptionEntry common_options[] = {
   { "homepage", 0, 0, G_OPTION_ARG_STRING, &opt_homepage, N_("URL for a website for this remote"), N_("URL") },
   { "icon", 0, 0, G_OPTION_ARG_STRING, &opt_icon, N_("URL for an icon for this remote"), N_("URL") },
   { "default-branch", 0, 0, G_OPTION_ARG_STRING, &opt_default_branch, N_("Default branch to use for this remote"), N_("BRANCH") },
+  { "api-server-url", 0, 0, G_OPTION_ARG_STRING, &opt_api_server_url, N_("Base Flatpak API URL for this remote"), N_("API-SERVER-URL") },
   { "collection-id", 0, 0, G_OPTION_ARG_STRING, &opt_collection_id, N_("Collection ID"), N_("COLLECTION-ID") },
   { "gpg-import", 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &opt_gpg_import, N_("Import GPG key from FILE (- for stdin)"), N_("FILE") },
   { "disable", 0, 0, G_OPTION_ARG_NONE, &opt_disable, N_("Disable the remote"), NULL },
@@ -164,6 +166,13 @@ get_config_from_opts (FlatpakDir *dir, const char *remote_name, gboolean *change
     {
       g_key_file_set_string (config, group, "xa.default-branch", opt_default_branch);
       g_key_file_set_boolean (config, group, "xa.default-branch-is-set", TRUE);
+      *changed = TRUE;
+    }
+
+  if (opt_api_server_url)
+    {
+      g_key_file_set_string (config, group, "xa.api-server-url", opt_api_server_url);
+      g_key_file_set_boolean (config, group, "xa.api-server-url-is-set", TRUE);
       *changed = TRUE;
     }
 

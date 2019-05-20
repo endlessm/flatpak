@@ -80,6 +80,7 @@ print_info (OstreeRepo *repo,
   const char *icon;
   const char *collection_id;
   const char *default_branch;
+  const char *api_server_url;
   const char *redirect_url;
   const char *deploy_collection_id;
   g_autoptr(GVariant) gpg_keys = NULL;
@@ -110,6 +111,9 @@ print_info (OstreeRepo *repo,
 
   if (g_variant_lookup (meta, "xa.default-branch", "&s", &default_branch))
     g_print (_("Default branch: %s\n"), default_branch);
+
+  if (g_variant_lookup (meta, "xa.api-server-url", "&s", &api_server_url))
+    g_print (_("Flatpak API server URL: %s\n"), api_server_url);
 
   if (g_variant_lookup (meta, "xa.redirect-url", "&s", &redirect_url))
     g_print (_("Redirect URL: %s\n"), redirect_url);

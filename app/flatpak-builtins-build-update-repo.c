@@ -40,6 +40,7 @@ static char *opt_homepage;
 static char *opt_icon;
 static char *opt_redirect_url;
 static char *opt_default_branch;
+static char *opt_api_server_url;
 static char *opt_collection_id = NULL;
 static gboolean opt_deploy_collection_id = FALSE;
 static char **opt_gpg_import;
@@ -64,6 +65,7 @@ static GOptionEntry options[] = {
   { "homepage", 0, 0, G_OPTION_ARG_STRING, &opt_homepage, N_("URL for a website for this repository"), N_("URL") },
   { "icon", 0, 0, G_OPTION_ARG_STRING, &opt_icon, N_("URL for an icon for this repository"), N_("URL") },
   { "default-branch", 0, 0, G_OPTION_ARG_STRING, &opt_default_branch, N_("Default branch to use for this repository"), N_("BRANCH") },
+  { "api-server-url", 0, 0, G_OPTION_ARG_STRING, &opt_api_server_url, N_("Base Flatpak API URL for this remote"), N_("API-SERVER-URL") },
   { "collection-id", 0, 0, G_OPTION_ARG_STRING, &opt_collection_id, N_("Collection ID"), N_("COLLECTION-ID") },
   { "deploy-collection-id", 0, 0, G_OPTION_ARG_NONE, &opt_deploy_collection_id, N_("Permanently deploy collection ID to client remote configurations"), NULL },
   { "gpg-import", 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &opt_gpg_import, N_("Import new default GPG public key from FILE"), N_("FILE") },
@@ -526,6 +528,10 @@ flatpak_builtin_build_update_repo (int argc, char **argv,
 
   if (opt_default_branch &&
       !flatpak_repo_set_default_branch (repo, opt_default_branch[0] ? opt_default_branch : NULL, error))
+    return FALSE;
+
+  if (opt_api_server_url &&
+      !flatpak_repo_set_api_server_url (repo, opt_api_server_url[0] ? opt_api_server_url : NULL, error))
     return FALSE;
 
   if (opt_collection_id != NULL)

@@ -62,6 +62,7 @@ struct _FlatpakRemotePrivate
   char             *local_collection_id;
   char             *local_title;
   char             *local_default_branch;
+  char             *local_api_server_url;
   char             *local_main_ref;
   gboolean          local_gpg_verify;
   gboolean          local_noenumerate;
@@ -78,6 +79,7 @@ struct _FlatpakRemotePrivate
   guint             local_collection_id_set  : 1;
   guint             local_title_set          : 1;
   guint             local_default_branch_set : 1;
+  guint             local_api_server_url_set : 1;
   guint             local_main_ref_set       : 1;
   guint             local_gpg_verify_set     : 1;
   guint             local_noenumerate_set    : 1;
@@ -117,6 +119,7 @@ flatpak_remote_finalize (GObject *object)
   g_free (priv->local_collection_id);
   g_free (priv->local_title);
   g_free (priv->local_default_branch);
+  g_free (priv->local_api_server_url);
   g_free (priv->local_main_ref);
 
   G_OBJECT_CLASS (flatpak_remote_parent_class)->finalize (object);
@@ -681,6 +684,54 @@ flatpak_remote_set_default_branch (FlatpakRemote *self,
 }
 
 /**
+ * flatpak_remote_get_api_server_url:
+ * @self: a #FlatpakRemote
+ *
+ * Returns the Flatpak API base URL for the remote.
+ *
+ * Returns: (transfer full): the Flatpak API base URL, or %NULL
+ *
+ * Since: 1.3.3
+ */
+char *
+flatpak_remote_get_api_server_url (FlatpakRemote *self)
+{
+  FlatpakRemotePrivate *priv = flatpak_remote_get_instance_private (self);
+
+  if (priv->local_api_server_url_set)
+    return g_strdup (priv->local_api_server_url);
+
+  if (priv->dir)
+    return flatpak_dir_get_remote_api_server_url (priv->dir, priv->name);
+
+  return NULL;
+}
+
+/**
+ * flatpak_remote_set_api_server_url:
+ * @self: a #FlatpakRemote
+ * @api_server_url: The new api_server_url
+ *
+ * Sets the Flatpak API base URL for this remote.
+ *
+ * Note: This is a local modification of this object, you must commit changes
+ * using flatpak_installation_modify_remote() for the changes to take
+ * effect.
+ *
+ * Since: 1.3.3
+ */
+void
+flatpak_remote_set_api_server_url (FlatpakRemote *self,
+                                   const char    *api_server_url)
+{
+  FlatpakRemotePrivate *priv = flatpak_remote_get_instance_private (self);
+
+  g_free (priv->local_api_server_url);
+  priv->local_api_server_url = g_strdup (api_server_url);
+  priv->local_api_server_url_set = TRUE;
+}
+
+/**
  * flatpak_remote_get_main_ref:
  * @self: a #FlatpakRemote
  *
@@ -1132,6 +1183,9 @@ flatpak_remote_commit (FlatpakRemote *self,
 
   if (priv->local_default_branch_set)
     g_key_file_set_string (config, group, "xa.default-branch", priv->local_default_branch);
+
+  if (priv->local_api_server_url_set)
+    g_key_file_set_string (config, group, "xa.api-server-url", priv->local_api_server_url);
 
   if (priv->local_main_ref_set)
     g_key_file_set_string (config, group, "xa.main-ref", priv->local_main_ref);

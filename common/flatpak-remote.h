@@ -95,6 +95,9 @@ FLATPAK_EXTERN void          flatpak_remote_set_icon (FlatpakRemote *self,
 FLATPAK_EXTERN char *        flatpak_remote_get_default_branch (FlatpakRemote *self);
 FLATPAK_EXTERN void          flatpak_remote_set_default_branch (FlatpakRemote *self,
                                                                 const char    *default_branch);
+FLATPAK_EXTERN char *        flatpak_remote_get_api_server_url (FlatpakRemote *self);
+FLATPAK_EXTERN void          flatpak_remote_set_api_server_url (FlatpakRemote *self,
+                                                                const char    *api_server_url);
 FLATPAK_EXTERN char *        flatpak_remote_get_main_ref (FlatpakRemote *self);
 FLATPAK_EXTERN void          flatpak_remote_set_main_ref (FlatpakRemote *self,
                                                           const char    *main_ref);
