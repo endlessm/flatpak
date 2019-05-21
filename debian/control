@@ -41,6 +41,7 @@ Build-Depends:
  libpolkit-agent-1-dev,
  libpolkit-gobject-1-dev,
  libseccomp-dev,
+ libsecret-1-dev,
  libsoup2.4-dev,
  libsystemd-dev,
  libxau-dev,
