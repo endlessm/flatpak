@@ -313,8 +313,18 @@ flatpak_remote_state_ensure_summary (FlatpakRemoteState *self,
                                      GError            **error)
 {
   if (self->summary == NULL)
-    return flatpak_fail_error (error, FLATPAK_ERROR_INVALID_DATA, _("Unable to load summary from remote %s: %s"), self->remote_name,
-                               self->summary_fetch_error != NULL ? self->summary_fetch_error->message : "unknown error");
+    {
+      if (self->summary_fetch_error != NULL &&
+          g_error_matches (self->summary_fetch_error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+        {
+          g_propagate_prefixed_error (error, g_error_copy (self->summary_fetch_error),
+                                      _("Unable to load summary from remote %s: "), self->remote_name);
+          return FALSE;
+        }
+
+      return flatpak_fail_error (error, FLATPAK_ERROR_INVALID_DATA, _("Unable to load summary from remote %s: %s"), self->remote_name,
+                                 self->summary_fetch_error != NULL ? self->summary_fetch_error->message : "unknown error");
+    }
 
   return TRUE;
 }
@@ -329,9 +339,30 @@ flatpak_remote_state_ensure_metadata (FlatpakRemoteState *self,
 
       /* If the collection ID is NULL the metadata comes from the summary */
       if (self->metadata_fetch_error != NULL)
-        error_msg = g_strdup (self->metadata_fetch_error->message);
+        {
+          /* Fetch error can be IO_ERROR_CANCELLED in instances like quick searching of apps in software clients.
+           * Hence, avoid converting them to FLATPAK_ERROR from IO_ERROR domain so the clients can handle the
+           * cancellation appropriately. */
+          if (g_error_matches (self->metadata_fetch_error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+            {
+              g_propagate_prefixed_error (error, g_error_copy (self->metadata_fetch_error),
+                                          _("Unable to load metadata from remote %s: "), self->remote_name);
+              return FALSE;
+            }
+
+          error_msg = g_strdup (self->metadata_fetch_error->message);
+        }
       else if (self->collection_id == NULL && self->summary_fetch_error != NULL)
-        error_msg = g_strdup_printf ("summary fetch error: %s", self->summary_fetch_error->message);
+        {
+          if (g_error_matches (self->summary_fetch_error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+            {
+              g_propagate_prefixed_error (error, g_error_copy (self->summary_fetch_error),
+                                          _("Unable to load metadata from remote %s: "), self->remote_name);
+              return FALSE;
+            }
+
+          error_msg = g_strdup_printf ("summary fetch error: %s", self->summary_fetch_error->message);
+        }
 
       return flatpak_fail_error (error, FLATPAK_ERROR_INVALID_DATA,
                                  _("Unable to load metadata from remote %s: %s"),
@@ -4957,8 +4988,18 @@ flatpak_dir_pull_extra_data (FlatpakDir          *self,
           g_autoptr(GError) my_error = NULL;
 
           if (!g_file_load_contents (extra_local_file, cancellable, &extra_local_contents, &extra_local_size, NULL, &my_error))
-            return flatpak_fail_error (error, FLATPAK_ERROR_INVALID_DATA, _("Failed to load local extra-data %s: %s"),
-                                       flatpak_file_get_path_cached (extra_local_file), my_error->message);
+            {
+              if  (g_error_matches (my_error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+                {
+                  g_propagate_prefixed_error (error, g_steal_pointer (&my_error), _("Failed to load local extra-data %s: "),
+                                              flatpak_file_get_path_cached (extra_local_file));
+                  return FALSE;
+                }
+
+              return flatpak_fail_error (error, FLATPAK_ERROR_INVALID_DATA, _("Failed to load local extra-data %s: %s"),
+                                         flatpak_file_get_path_cached (extra_local_file), my_error->message);
+	     }
+
           if (extra_local_size != download_size)
             return flatpak_fail_error (error, FLATPAK_ERROR_INVALID_DATA, _("Wrong size for extra-data %s"), flatpak_file_get_path_cached (extra_local_file));
 
