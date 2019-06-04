@@ -1,0 +1,8 @@
+[main]
+host = https://www.transifex.com
+
+[flatpak.all]
+source_file = po/flatpak.pot
+source_lang = en
+file_filter = po/<lang>.po
+type = PO
