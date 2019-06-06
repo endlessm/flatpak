@@ -4585,7 +4585,7 @@ flatpak_dir_pull_extra_data (FlatpakDir          *self,
             {
               if  (g_error_matches (my_error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
                 {
-                  g_propagate_prefixed_error (error, g_steal_pointer (&my_error), _("Failed to load local extra-data %s"),
+                  g_propagate_prefixed_error (error, g_steal_pointer (&my_error), _("Failed to load local extra-data %s: "),
                                               flatpak_file_get_path_cached (extra_local_file));
                   return FALSE;
                 }
