@@ -36,9 +36,9 @@ if command -v flatpak > /dev/null; then
             do
                 bin_path=$install_path/exports/bin
                 case ":$PATH:" in
-                    *":$bin_path:"*) :;;
-                    *":$bin_path/:"*) :;;
-                    *) new_dirs=${new_dirs:+${new_dirs}:}$bin_path;;
+                    (*":$bin_path:"*) :;;
+                    (*":$bin_path/:"*) :;;
+                    (*) new_dirs=${new_dirs:+${new_dirs}:}$bin_path;;
                 esac
             done
             echo "$new_dirs"
