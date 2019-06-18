@@ -26,12 +26,12 @@
 #define __FLATPAK_PARENTAL_CONTROLS_PRIVATE_H__
 
 #include <appstream-glib.h>
-#include <libeos-parental-controls/app-filter.h>
+#include <libmalcontent/app-filter.h>
 #include <glib.h>
 
 AsContentRating *flatpak_appstream_get_latest_content_rating (AsApp *app);
 
 gboolean         flatpak_appstream_check_rating (AsContentRating *rating,
-                                                 EpcAppFilter    *filter);
+                                                 MctAppFilter    *filter);
 
 #endif /* __FLATPAK_PARENTAL_CONTROLS_PRIVATE_H__ */
