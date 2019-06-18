@@ -20,7 +20,7 @@
 
 #include "config.h"
 
-#include <libeos-parental-controls/app-filter.h>
+#include <libmalcontent/malcontent.h>
 #include <locale.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1796,7 +1796,8 @@ handle_update_summary (FlatpakSystemHelper   *object,
  * a policy here. */
 static gboolean
 authorize_deploy_add_polkit_details (const gchar           *installation,
-                                     GDBusMethodInvocation *invocation,
+                                     GDBusConnection       *system_bus,
+                                     pid_t                  sender_pid,
                                      const gchar           *ref,
                                      const gchar           *origin,
                                      PolkitSubject         *subject,
@@ -1806,18 +1807,19 @@ authorize_deploy_add_polkit_details (const gchar           *installation,
   g_autoptr(GError) local_error = NULL;
   g_autoptr(FlatpakDir) system = NULL;
   g_autoptr(AsApp) app = NULL;
-  g_autoptr(EpcAppFilter) app_filter = NULL;
+  g_autoptr(MctManager) manager = NULL;
+  g_autoptr(MctAppFilter) app_filter = NULL;
   g_autoptr(AutoPolkitSubject) subject_process = NULL;
   gint subject_uid;
 
-  /* The ostree-metadata and appstream/* branches should not have any parental
+  /* The ostree-metadata and appstream/ branches should not have any parental
    * controls restrictions. */
   if (!g_str_has_prefix (ref, "app/") && !g_str_has_prefix (ref, "runtime/"))
     return TRUE;
 
   g_debug ("Getting parental controls details for %s from %s", ref, origin);
 
-  system = dir_get_system (installation, get_sender_pid (invocation), error);
+  system = dir_get_system (installation, sender_pid, error);
   if (system == NULL)
     return FALSE;
 
@@ -1848,13 +1850,16 @@ authorize_deploy_add_polkit_details (const gchar           *installation,
 
   g_debug ("Subject UID is %d", subject_uid);
 
-  app_filter = epc_get_app_filter (NULL, subject_uid, TRUE, NULL, error);
+  manager = mct_manager_new (system_bus);
+  app_filter = mct_manager_get_app_filter (manager, subject_uid,
+                                           MCT_GET_APP_FILTER_FLAGS_INTERACTIVE,
+                                           NULL, error);
   if (app_filter == NULL)
     return FALSE;
 
   polkit_details_insert (details,
                          "parental-controls-repo-installation-allowed",
-                         epc_app_filter_is_system_installation_allowed (app_filter) ? "1" : "0");
+                         mct_app_filter_is_system_installation_allowed (app_filter) ? "1" : "0");
 
   /* Check that this user is actually allowed to install this app. */
   if (app != NULL)
@@ -1957,6 +1962,7 @@ flatpak_authorize_method_handler (GDBusInterfaceSkeleton *interface,
   const gchar *action = NULL;
   gboolean authorized = FALSE;
   gboolean no_interaction = FALSE;
+  GDBusConnection *system_bus = g_dbus_method_invocation_get_connection (invocation);
 
   /* Ensure we don't idle exit */
   schedule_idle_callback ();
@@ -1992,7 +1998,9 @@ flatpak_authorize_method_handler (GDBusInterfaceSkeleton *interface,
           gboolean is_app, is_install;
           g_autoptr(GError) local_error = NULL;
 
-          if (!authorize_deploy_add_polkit_details (installation, invocation, ref, origin,
+          if (!authorize_deploy_add_polkit_details (installation, system_bus,
+                                                    get_sender_pid (invocation),
+                                                    ref, origin,
                                                     subject, details, &local_error))
             {
               g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
@@ -2086,7 +2094,9 @@ flatpak_authorize_method_handler (GDBusInterfaceSkeleton *interface,
           return FALSE;
         }
 
-      if (!authorize_deploy_add_polkit_details (installation, invocation, ref, remote,
+      if (!authorize_deploy_add_polkit_details (installation, system_bus,
+                                                get_sender_pid (invocation),
+                                                ref, remote,
                                                 subject, details, &local_error))
         {
           g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
