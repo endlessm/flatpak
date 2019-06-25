@@ -32,8 +32,9 @@
  * The version field was added in flatpak 1.2, anything before is 0.
  *
  * Version 1 added appdata-name/summary/version/license
+ * Version 2 added appdata-content-rating
  */
-#define FLATPAK_DEPLOY_VERSION_CURRENT 1
+#define FLATPAK_DEPLOY_VERSION_CURRENT 2
 #define FLATPAK_DEPLOY_VERSION_ANY 0
 
 #define FLATPAK_TYPE_DIR flatpak_dir_get_type ()
@@ -356,6 +357,8 @@ gboolean       flatpak_remove_override_keyfile (const char *app_id,
 int                 flatpak_deploy_data_get_version (GVariant *deploy_data);
 const char *        flatpak_deploy_data_get_origin (GVariant *deploy_data);
 const char *        flatpak_deploy_data_get_commit (GVariant *deploy_data);
+const char *        flatpak_deploy_data_get_appdata_content_rating_type (GVariant *deploy_data);
+GHashTable *        flatpak_deploy_data_get_appdata_content_rating (GVariant *deploy_data);
 const char **       flatpak_deploy_data_get_subpaths (GVariant *deploy_data);
 guint64             flatpak_deploy_data_get_installed_size (GVariant *deploy_data);
 const char *        flatpak_deploy_data_get_alt_id (GVariant *deploy_data);
