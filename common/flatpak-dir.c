@@ -42,14 +42,21 @@
 #include "libglnx/libglnx.h"
 #include "flatpak-error.h"
 #include <ostree.h>
+#include <polkit/polkit.h>
 
 #include "flatpak-dir-private.h"
 #include "flatpak-utils-base-private.h"
 #include "flatpak-oci-registry-private.h"
+#include "flatpak-ref.h"
 #include "flatpak-run-private.h"
 #include "flatpak-appdata-private.h"
 
 #include "errno.h"
+
+#ifdef HAVE_LIBMALCONTENT
+#include <libmalcontent/malcontent.h>
+#include "flatpak-parental-controls-private.h"
+#endif
 
 #ifdef HAVE_LIBSYSTEMD
 #define SD_JOURNAL_SUPPRESS_LOCATION
@@ -66,6 +73,18 @@
 #define SYSCONF_INSTALLATIONS_FILE_EXT ".conf"
 #define SYSCONF_REMOTES_DIR "remotes.d"
 #define SYSCONF_REMOTES_FILE_EXT ".flatpakrepo"
+
+/* This uses a weird Auto prefix to avoid conflicts with later added polkit types.
+ */
+typedef PolkitAuthority           AutoPolkitAuthority;
+typedef PolkitAuthorizationResult AutoPolkitAuthorizationResult;
+typedef PolkitDetails             AutoPolkitDetails;
+typedef PolkitSubject             AutoPolkitSubject;
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (AutoPolkitAuthority, g_object_unref)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (AutoPolkitAuthorizationResult, g_object_unref)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (AutoPolkitDetails, g_object_unref)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (AutoPolkitSubject, g_object_unref)
 
 static FlatpakOciRegistry *flatpak_dir_create_system_child_oci_registry (FlatpakDir   *self,
                                                                          GLnxLockFile *file_lock,
@@ -7550,6 +7569,122 @@ apply_extra_data (FlatpakDir   *self,
   return TRUE;
 }
 
+/* Check the user’s parental controls allow installation of @ref by looking at
+ * its cached @deploy_data, which contains its content rating as extracted from
+ * its AppData when it was originally downloaded. That’s compared to the
+ * parental controls policy loaded from the #MctManager.
+ *
+ * If @ref should not be installed, an error is returned. */
+static gboolean
+flatpak_dir_check_parental_controls (FlatpakDir    *self,
+                                     const char    *ref,
+                                     GVariant      *deploy_data,
+                                     GCancellable  *cancellable,
+                                     GError       **error)
+{
+#ifdef HAVE_LIBMALCONTENT
+  g_autoptr(GError) local_error = NULL;
+  const char *on_session = g_getenv ("FLATPAK_SYSTEM_HELPER_ON_SESSION");
+  g_autoptr(GDBusConnection) dbus_connection = NULL;
+  g_autoptr(MctManager) manager = NULL;
+  g_autoptr(MctAppFilter) app_filter = NULL;
+  const char *content_rating_type;
+  g_autoptr(GHashTable) content_rating = NULL;
+  g_autoptr(AutoPolkitAuthority) authority = NULL;
+  g_autoptr(AutoPolkitDetails) details = NULL;
+  g_autoptr(AutoPolkitSubject) subject = NULL;
+  g_autoptr(AutoPolkitAuthorizationResult) result = NULL;
+  gboolean authorized;
+  gboolean repo_installation_allowed, app_is_appropriate;
+
+  /* The ostree-metadata and appstream/ branches should not have any parental
+   * controls restrictions. Similarly, for the moment, there is no point in
+   * restricting runtimes. */
+  if (!g_str_has_prefix (ref, "app/"))
+    return TRUE;
+
+  g_debug ("Getting parental controls details for %s from %s",
+           ref, flatpak_deploy_data_get_origin (deploy_data));
+
+  if (on_session != NULL)
+    {
+      /* FIXME: Instead of skipping the parental controls check in the test
+       * environment, make a mock service for it.
+       * https://phabricator.endlessm.com/T25340 */
+      g_debug ("Skipping parental controls check for %s since the "
+               "system bus is unavailable in the test environment", ref);
+      return TRUE;
+    }
+
+  dbus_connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, &local_error);
+  if (dbus_connection == NULL)
+    {
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return FALSE;
+    }
+
+  manager = mct_manager_new (dbus_connection);
+  app_filter = mct_manager_get_app_filter (manager, getuid (),
+                                           MCT_GET_APP_FILTER_FLAGS_INTERACTIVE,
+                                           cancellable, &local_error);
+  if (g_error_matches (local_error, MCT_APP_FILTER_ERROR, MCT_APP_FILTER_ERROR_DISABLED))
+    {
+      g_debug ("Skipping parental controls check for %s since parental "
+               "controls are disabled globally", ref);
+      return TRUE;
+    }
+  else if (local_error != NULL)
+    {
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return FALSE;
+    }
+
+  /* Check the content rating against the parental controls. If the app is
+   * allowed to be installed, return so immediately. */
+  repo_installation_allowed = ((self->user && mct_app_filter_is_user_installation_allowed (app_filter)) ||
+                               (!self->user && mct_app_filter_is_system_installation_allowed (app_filter)));
+
+  content_rating_type = flatpak_deploy_data_get_appdata_content_rating_type (deploy_data);
+  content_rating = flatpak_deploy_data_get_appdata_content_rating (deploy_data);
+  app_is_appropriate = flatpak_oars_check_rating (content_rating, content_rating_type,
+                                                  app_filter);
+
+  if (repo_installation_allowed && app_is_appropriate)
+    return TRUE;
+
+  /* Otherwise, check polkit to see if the admin is going to allow the user to
+   * override their parental controls policy. We can’t pass any details to this
+   * polkit check, since it could be run by the user or by the system helper,
+   * and non-root users can’t pass details to polkit checks. */
+  authority = polkit_authority_get_sync (NULL, error);
+  if (authority == NULL)
+    return FALSE;
+
+  if (self->user)
+    subject = polkit_unix_process_new_for_owner (getpid (), 0, getuid ());
+  else
+    subject = polkit_unix_process_new_for_owner (self->source_pid, 0, -1);
+
+  result = polkit_authority_check_authorization_sync (authority, subject,
+                                                      "org.freedesktop.Flatpak.override-parental-controls",
+                                                      NULL,
+                                                      POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION,
+                                                      cancellable, error);
+  if (result == NULL)
+    return FALSE;
+
+  authorized = polkit_authorization_result_get_is_authorized (result);
+
+  if (!authorized)
+    return flatpak_fail_error (error, FLATPAK_ERROR_PERMISSION_DENIED,
+                               /* Translators: The placeholder is for an app ref. */
+                               _("Installing %s is not allowed by the policy set by your administrator"),
+                               ref);
+#endif  /* HAVE_LIBMALCONTENT */
+
+  return TRUE;
+}
+
 /* We create a deploy ref for the currently deployed version of all refs to avoid
    deployed commits being pruned when e.g. we pull --no-deploy. */
 static gboolean
@@ -7977,6 +8112,11 @@ flatpak_dir_deploy (FlatpakDir          *self,
                                              (char **) subpaths,
                                              installed_size,
                                              previous_ids);
+
+  /* Check the app is actually allowed to be used by this user. This can block
+   * on getting authorisation. */
+  if (!flatpak_dir_check_parental_controls (self, ref, deploy_data, cancellable, error))
+    return FALSE;
 
   deploy_data_file = g_file_get_child (checkoutdir, "deploy");
   if (!flatpak_variant_save (deploy_data_file, deploy_data, cancellable, error))
