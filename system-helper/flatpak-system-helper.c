@@ -1802,6 +1802,7 @@ authorize_deploy_add_polkit_details (const gchar           *installation,
                                      const gchar           *origin,
                                      PolkitSubject         *subject,
                                      PolkitDetails         *details,
+                                     guint32                arg_flags,
                                      GError               **error)
 {
   g_autoptr(GError) local_error = NULL;
@@ -1869,6 +1870,21 @@ authorize_deploy_add_polkit_details (const gchar           *installation,
       polkit_details_insert (details,
                              "parental-controls-is-appropriate",
                              flatpak_appstream_check_rating (rating, app_filter) ? "1" : "0");
+    }
+  else if (g_str_has_prefix (ref, "runtime/") &&
+           (arg_flags & FLATPAK_HELPER_DEPLOY_FLAGS_APP_HINT) != 0)
+    {
+      /* This is the case where polkit action has been converted to "app-install" instead of
+       * "runtime-install" or "runtime-update". This happens because flatpak "keeps" max permissions
+       * to avoid multiple polkit dialogs.
+       *
+       * Given our "app-install" action is checked separately with parental-controls checks in polkit
+       * rules, this is a workaround to avoid an additional polkit dialog installation of a runtime or
+       * extension ref, if there was a prior "app-install" op executed in the same transaction */
+      g_debug ("No AppStream data found for runtime ref %s — disabling parental control "
+               "checks for this ref", ref);
+      polkit_details_insert (details,
+                             "parental-controls-is-appropriate", "1");
     }
   else
     {
@@ -2001,7 +2017,7 @@ flatpak_authorize_method_handler (GDBusInterfaceSkeleton *interface,
           if (!authorize_deploy_add_polkit_details (installation, system_bus,
                                                     get_sender_pid (invocation),
                                                     ref, origin,
-                                                    subject, details, &local_error))
+                                                    subject, details, flags, &local_error))
             {
               g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
               return FALSE;
@@ -2097,7 +2113,7 @@ flatpak_authorize_method_handler (GDBusInterfaceSkeleton *interface,
       if (!authorize_deploy_add_polkit_details (installation, system_bus,
                                                 get_sender_pid (invocation),
                                                 ref, remote,
-                                                subject, details, &local_error))
+                                                subject, details, flags, &local_error))
         {
           g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
           return FALSE;
