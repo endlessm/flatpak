@@ -170,7 +170,7 @@ struct FlatpakDir
   gboolean         no_interaction;
   pid_t            source_pid;
 
-  GDBusConnection *system_helper_bus;
+  //GDBusConnection *system_helper_bus;
 
   GHashTable      *summary_cache;
 
@@ -1299,27 +1299,27 @@ flatpak_dir_system_helper_call (FlatpakDir         *self,
 {
   GVariant *res;
 
-  if (g_once_init_enter (&self->system_helper_bus))
-    {
+  //if (g_once_init_enter (&self->system_helper_bus))
+  //  {
       const char *on_session = g_getenv ("FLATPAK_SYSTEM_HELPER_ON_SESSION");
-      GDBusConnection *system_helper_bus =
+      g_autoptr(GDBusConnection) system_helper_bus =
         g_bus_get_sync (on_session != NULL ? G_BUS_TYPE_SESSION : G_BUS_TYPE_SYSTEM,
                         cancellable, NULL);
 
       /* To ensure reverse mapping */
       flatpak_error_quark ();
 
-      g_once_init_leave (&self->system_helper_bus, system_helper_bus ? system_helper_bus : (gpointer) 1 );
-    }
+  //    g_once_init_leave (&self->system_helper_bus, system_helper_bus ? system_helper_bus : (gpointer) 1 );
+  //  }
 
-  if (self->system_helper_bus == (gpointer) 1)
+  if (!system_helper_bus)
     {
       flatpak_fail (error, _("Unable to connect to system bus"));
       return NULL;
     }
 
   g_debug ("Calling system helper: %s", method_name);
-  res = g_dbus_connection_call_with_unix_fd_list_sync (self->system_helper_bus,
+  res = g_dbus_connection_call_with_unix_fd_list_sync (system_helper_bus,
                                                        "org.freedesktop.Flatpak.SystemHelper",
                                                        "/org/freedesktop/Flatpak/SystemHelper",
                                                        "org.freedesktop.Flatpak.SystemHelper",
@@ -1745,8 +1745,8 @@ flatpak_dir_finalize (GObject *object)
   g_clear_object (&self->basedir);
   g_clear_pointer (&self->extra_data, dir_extra_data_free);
 
-  if (self->system_helper_bus != (gpointer) 1)
-    g_clear_object (&self->system_helper_bus);
+  //if (self->system_helper_bus != (gpointer) 1)
+  //  g_clear_object (&self->system_helper_bus);
 
   g_clear_object (&self->soup_session);
   g_clear_pointer (&self->summary_cache, g_hash_table_unref);
