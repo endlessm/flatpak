@@ -1,3 +1,9 @@
+flatpak (1.3.3-1endless2) unstable; urgency=medium
+
+  * d/control: Use libmalcontent-0-dev (version:0.4.0)
+
+ -- Umang Jain <umang@endlessm.com>  Wed, 23 Jul 2019 20:18:56 +0530
+
 flatpak (1.3.3-1endless1) unstable; urgency=medium
 
   * New upstream release
