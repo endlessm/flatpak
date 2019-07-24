@@ -8,7 +8,8 @@ polkit.addRule(function(action, subject) {
             return polkit.Result.YES;
     } else if (action.id == "org.freedesktop.Flatpak.app-install" &&
                subject.active == true && subject.local == true &&
-               action.lookup("parental-controls-repo-installation-allowed") === "1" &&
+               (subject.isInGroup("@privileged_group@") ||
+                action.lookup("parental-controls-repo-installation-allowed") === "1") &&
                action.lookup("parental-controls-is-appropriate") === "1") {
             return polkit.Result.YES;
     }
