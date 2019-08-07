@@ -32,11 +32,12 @@
 #include <sys/personality.h>
 #include <grp.h>
 #include <unistd.h>
+#include <gio/gdesktopappinfo.h>
 #include <gio/gunixfdlist.h>
 #ifdef HAVE_DCONF
 #include <dconf/dconf.h>
 #endif
-#include <libeos-parental-controls/app-filter.h>
+#include <libmalcontent/malcontent.h>
 
 #ifdef ENABLE_SECCOMP
 #include <seccomp.h>
@@ -3196,6 +3197,84 @@ regenerate_ld_cache (GPtrArray    *base_argv_array,
   return glnx_steal_fd (&ld_so_fd);
 }
 
+static gboolean
+check_parental_controls (const char    *app_ref,
+                         FlatpakDeploy *app_deploy,
+                         GCancellable  *cancellable,
+                         GError       **error)
+{
+  g_auto(GStrv) app_ref_parts = NULL;
+  g_autoptr(MctManager) manager = NULL;
+  g_autoptr(MctAppFilter) app_filter = NULL;
+  g_autoptr(GAsyncResult) app_filter_result = NULL;
+  g_autoptr(GDBusConnection) system_bus = NULL;
+  g_autoptr(GError) local_error = NULL;
+
+  app_ref_parts = flatpak_decompose_ref (app_ref, error);
+  if (app_ref_parts == NULL)
+    return FALSE;
+
+  system_bus = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, error);
+  if (system_bus == NULL)
+    return FALSE;
+
+  manager = mct_manager_new (system_bus);
+  app_filter = mct_manager_get_app_filter (manager, getuid (),
+                                           MCT_GET_APP_FILTER_FLAGS_INTERACTIVE,
+                                           cancellable, &local_error);
+  if (local_error != NULL &&
+      !g_error_matches (local_error, MCT_APP_FILTER_ERROR, MCT_APP_FILTER_ERROR_INVALID_USER))
+    {
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return FALSE;
+    }
+  g_clear_error (&local_error);
+
+  if (app_filter != NULL)
+    {
+      g_autoptr(GDesktopAppInfo) app_info = NULL;
+      gboolean allowed = FALSE;
+
+      if (app_deploy != NULL)
+        {
+          g_autoptr(GFile) deploy_dir = NULL;
+          const char *deploy_path;
+          g_autofree char *desktop_file_name = NULL;
+          g_autofree char *desktop_file_path = NULL;
+
+          deploy_dir = flatpak_deploy_get_dir (app_deploy);
+          deploy_path = flatpak_file_get_path_cached (deploy_dir);
+
+          desktop_file_name = g_strconcat (app_ref_parts[1], ".desktop", NULL);
+          desktop_file_path = g_build_path (G_DIR_SEPARATOR_S,
+                                            deploy_path,
+                                            "export",
+                                            "share",
+                                            "applications",
+                                            desktop_file_name,
+                                            NULL);
+          app_info = g_desktop_app_info_new_from_filename (desktop_file_path);
+        }
+
+      /* Filter by app info (which runs multiple checks, including whether the
+       * app id, executable path and content types are allowed) if available
+       * otherwise filter by app ref */
+      if (app_info != NULL)
+        allowed = mct_app_filter_is_appinfo_allowed (app_filter,
+                                                     G_APP_INFO (app_info));
+      else
+        allowed = mct_app_filter_is_flatpak_ref_allowed (app_filter, app_ref);
+
+      if (!allowed)
+        return flatpak_fail (error,
+                             /* Translators: The placeholder is for an app ref. */
+                             _("Running %s is not allowed by the policy set by your administrator"),
+                             app_ref);
+    }
+
+  return TRUE;
+}
+
 gboolean
 flatpak_run_app (const char     *app_ref,
                  FlatpakDeploy  *app_deploy,
@@ -3247,7 +3326,7 @@ flatpak_run_app (const char     *app_ref,
   gboolean generate_ld_so_conf = TRUE;
   gboolean use_ld_so_cache = TRUE;
   gboolean sandboxed = (flags & FLATPAK_RUN_FLAG_SANDBOX) != 0;
-  g_autoptr(EpcAppFilter) app_filter = NULL;
+  g_autoptr(MctAppFilter) app_filter = NULL;
   g_autoptr(GAsyncResult) app_filter_result = NULL;
 
   struct stat s;
@@ -3256,21 +3335,10 @@ flatpak_run_app (const char     *app_ref,
   if (app_ref_parts == NULL)
     return FALSE;
 
-  /* Check that this user is actually allowed to run this app. When running
-   * from the gnome-initial-setup session, an app filter might not be available. */
-  app_filter = epc_get_app_filter (NULL, getuid (), TRUE, cancellable, &my_error);
-  if (my_error != NULL &&
-      !g_error_matches (my_error, EPC_APP_FILTER_ERROR, EPC_APP_FILTER_ERROR_INVALID_USER))
-    {
-      g_propagate_error (error, g_steal_pointer (&my_error));
-      return FALSE;
-    }
-  g_clear_error (&my_error);
-
-  if (app_filter != NULL &&
-      !epc_app_filter_is_flatpak_ref_allowed (app_filter, app_ref))
-    return flatpak_fail (error, _("%s is blacklisted for the current user"),
-                         app_ref);
+  /* Check the user is allowed to run this flatpak. */
+  if (!check_parental_controls (app_ref, app_deploy,
+                                cancellable, error))
+    return FALSE;
 
   /* Construct the bwrap context. */
   bwrap = flatpak_bwrap_new (NULL);

@@ -23,17 +23,17 @@
 #include <glib.h>
 #include <gio/gio.h>
 #include <appstream-glib.h>
-#include <libeos-parental-controls/app-filter.h>
+#include <libmalcontent/app-filter.h>
 
 #include "flatpak-parental-controls-private.h"
 
-/* Convert an #EpcAppFilterOarsValue to an #AsContentRatingValue. This is
+/* Convert an #MctAppFilterOarsValue to an #AsContentRatingValue. This is
  * actually a trivial cast, since the types are defined the same; but throw in
  * a static assertion to be sure. */
 static AsContentRatingValue
-convert_app_filter_oars_value (EpcAppFilterOarsValue filter_value)
+convert_app_filter_oars_value (MctAppFilterOarsValue filter_value)
 {
-  G_STATIC_ASSERT (AS_CONTENT_RATING_VALUE_LAST == EPC_APP_FILTER_OARS_VALUE_INTENSE + 1);
+  G_STATIC_ASSERT (AS_CONTENT_RATING_VALUE_LAST == MCT_APP_FILTER_OARS_VALUE_INTENSE + 1);
 
   return (AsContentRatingValue) filter_value;
 }
@@ -80,14 +80,14 @@ flatpak_appstream_get_latest_content_rating (AsApp *app)
  */
 gboolean
 flatpak_appstream_check_rating (AsContentRating *rating,
-                                EpcAppFilter    *filter)
+                                MctAppFilter    *filter)
 {
-  g_autofree const gchar **oars_sections = epc_app_filter_get_oars_sections (filter);
+  g_autofree const gchar **oars_sections = mct_app_filter_get_oars_sections (filter);
 
   for (gsize i = 0; oars_sections[i] != NULL; i++)
     {
       AsContentRatingValue rating_value;
-      EpcAppFilterOarsValue filter_value = epc_app_filter_get_oars_value (filter,
+      MctAppFilterOarsValue filter_value = mct_app_filter_get_oars_value (filter,
                                                                           oars_sections[i]);
 
       if (rating != NULL)
@@ -96,7 +96,7 @@ flatpak_appstream_check_rating (AsContentRating *rating,
         rating_value = AS_CONTENT_RATING_VALUE_INTENSE;
 
       if (rating_value == AS_CONTENT_RATING_VALUE_UNKNOWN ||
-          filter_value == EPC_APP_FILTER_OARS_VALUE_UNKNOWN)
+          filter_value == MCT_APP_FILTER_OARS_VALUE_UNKNOWN)
         continue;
       else if (convert_app_filter_oars_value (filter_value) < rating_value)
         return FALSE;

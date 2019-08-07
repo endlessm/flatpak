@@ -42,7 +42,7 @@
 #include "flatpak-error.h"
 #include <ostree.h>
 #include <appstream-glib.h>
-#include <libeos-parental-controls/app-filter.h>
+#include <libmalcontent/malcontent.h>
 
 #include "flatpak-dir-private.h"
 #include "flatpak-utils-private.h"
@@ -8407,15 +8407,20 @@ flatpak_dir_user_check_parental_controls (FlatpakDir    *self,
    * anyone. */
   if (app != NULL)
     {
-      g_autoptr(EpcAppFilter) app_filter = NULL;
-      app_filter = epc_get_app_filter (dbus_connection, getuid (), TRUE, cancellable, error);
+      g_autoptr(MctManager) manager = NULL;
+      g_autoptr(MctAppFilter) app_filter = NULL;
+
+      manager = mct_manager_new (dbus_connection);
+      app_filter = mct_manager_get_app_filter (manager, getuid (),
+                                               MCT_GET_APP_FILTER_FLAGS_INTERACTIVE,
+                                               cancellable, error);
       if (app_filter == NULL)
         return FALSE;
 
       AsContentRating *rating = flatpak_appstream_get_latest_content_rating (app);
 
       g_assert (self->user);
-      if (!epc_app_filter_is_user_installation_allowed (app_filter))
+      if (!mct_app_filter_is_user_installation_allowed (app_filter))
         return flatpak_fail (error, _("Current user is not allowed to install apps"));
       if (!flatpak_appstream_check_rating (rating, app_filter))
         return flatpak_fail (error,
