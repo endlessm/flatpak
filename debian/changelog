@@ -1,3 +1,12 @@
+flatpak (1.4.99-1endless1) eos; urgency=medium
+
+  * Rebase against upstream master (commit a641bb76)
+  * Resync Endless packaging changes:
+    - Add malcontent build dependency
+    - Use /var/endless-extra/flatpak as external directory for system installation
+
+ -- Andre Moreira Magalhaes <andre@endlessm.com>  Wed, 18 Sep 2019 19:56:13 -0300
+
 flatpak (1.4.3-1) unstable; urgency=medium
 
   * New upstream stable release
