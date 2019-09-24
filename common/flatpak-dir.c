@@ -7518,6 +7518,7 @@ flatpak_dir_check_parental_controls (FlatpakDir    *self,
 #ifdef USE_SYSTEM_HELPER
   g_autoptr(GError) local_error = NULL;
   const char *on_session = g_getenv ("FLATPAK_SYSTEM_HELPER_ON_SESSION");
+  const char *skip_parental_controls_no_system_bus = g_getenv ("FLATPAK_SKIP_PARENTAL_CONTROLS_NO_SYSTEM_BUS");
   g_autoptr(GDBusConnection) dbus_connection = NULL;
   g_autoptr(MctManager) manager = NULL;
   g_autoptr(MctAppFilter) app_filter = NULL;
@@ -7553,6 +7554,16 @@ flatpak_dir_check_parental_controls (FlatpakDir    *self,
   dbus_connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, &local_error);
   if (dbus_connection == NULL)
     {
+      if (skip_parental_controls_no_system_bus != NULL)
+        {
+          /* FIXME: The image builder doesn't run the system bus and thus there
+           * is no way to check parental controls, so lets skip it.
+           * https://phabricator.endlessm.com/T27896 */
+          g_debug ("Skipping parental controls check for %s as requested since "
+                   "the system bus is unavailable in the environment", ref);
+          return TRUE;
+        }
+
       g_propagate_error (error, g_steal_pointer (&local_error));
       return FALSE;
     }
