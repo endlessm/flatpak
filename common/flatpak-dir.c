@@ -7662,6 +7662,7 @@ flatpak_dir_check_parental_controls (FlatpakDir    *self,
   g_autoptr(AutoPolkitAuthority) authority = NULL;
   g_autoptr(AutoPolkitDetails) details = NULL;
   g_autoptr(AutoPolkitSubject) subject = NULL;
+  gint subject_uid;
   g_autoptr(AutoPolkitAuthorizationResult) result = NULL;
   gboolean authorized;
   gboolean repo_installation_allowed, app_is_appropriate;
@@ -7702,8 +7703,22 @@ flatpak_dir_check_parental_controls (FlatpakDir    *self,
       return FALSE;
     }
 
+  if (self->user)
+    subject = polkit_unix_process_new_for_owner (getpid (), 0, getuid ());
+  else
+    subject = polkit_unix_process_new_for_owner (self->source_pid, 0, -1);
+
+  /* Get the parental controls for the invoking user. */
+  subject_uid = polkit_unix_process_get_uid (POLKIT_UNIX_PROCESS (subject));
+  if (subject_uid == -1)
+    {
+      g_set_error_literal (error, G_DBUS_ERROR, G_DBUS_ERROR_AUTH_FAILED,
+                           "Failed to get subject UID");
+      return FALSE;
+    }
+
   manager = mct_manager_new (dbus_connection);
-  app_filter = mct_manager_get_app_filter (manager, getuid (),
+  app_filter = mct_manager_get_app_filter (manager, subject_uid,
                                            MCT_GET_APP_FILTER_FLAGS_INTERACTIVE,
                                            cancellable, &local_error);
   if (g_error_matches (local_error, MCT_APP_FILTER_ERROR, MCT_APP_FILTER_ERROR_DISABLED))
@@ -7738,11 +7753,6 @@ flatpak_dir_check_parental_controls (FlatpakDir    *self,
   authority = polkit_authority_get_sync (NULL, error);
   if (authority == NULL)
     return FALSE;
-
-  if (self->user)
-    subject = polkit_unix_process_new_for_owner (getpid (), 0, getuid ());
-  else
-    subject = polkit_unix_process_new_for_owner (self->source_pid, 0, -1);
 
   result = polkit_authority_check_authorization_sync (authority, subject,
                                                       "org.freedesktop.Flatpak.override-parental-controls",
