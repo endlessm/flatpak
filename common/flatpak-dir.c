@@ -7703,7 +7703,7 @@ flatpak_dir_check_parental_controls (FlatpakDir    *self,
       return FALSE;
     }
 
-  if (self->user)
+  if (self->user || self->source_pid == 0)
     subject = polkit_unix_process_new_for_owner (getpid (), 0, getuid ());
   else
     subject = polkit_unix_process_new_for_owner (self->source_pid, 0, -1);
