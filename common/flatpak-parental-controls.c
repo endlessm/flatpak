@@ -30,19 +30,19 @@
  * See https://www.freedesktop.org/software/appstream/docs/chap-Metadata.html#tag-content_rating
  * for details of the appstream content rating specification.
  *
- * See https://hughsie.github.io/oars/ for details of OARS.
+ * See https://hughsie.github.io/oars/ for details of OARS. Specifically,
+ * https://github.com/hughsie/oars/tree/master/specification/.
  */
 
 /* Convert an appstream <content_attribute/> value to #MctAppFilterOarsValue.
- * %NULL is converted to %MCT_APP_FILTER_OARS_VALUE_UNKNOWN.
  * https://www.freedesktop.org/software/appstream/docs/chap-Metadata.html#tag-content_rating
  */
 static MctAppFilterOarsValue
 app_filter_oars_value_from_appdata (const gchar *appdata_value)
 {
-  if (appdata_value == NULL)
-    return MCT_APP_FILTER_OARS_VALUE_UNKNOWN;
-  else if (g_str_equal (appdata_value, "intense"))
+  g_return_val_if_fail (appdata_value != NULL, MCT_APP_FILTER_OARS_VALUE_UNKNOWN);
+
+  if (g_str_equal (appdata_value, "intense"))
     return MCT_APP_FILTER_OARS_VALUE_INTENSE;
   else if (g_str_equal (appdata_value, "moderate"))
     return MCT_APP_FILTER_OARS_VALUE_MODERATE;
@@ -50,6 +50,8 @@ app_filter_oars_value_from_appdata (const gchar *appdata_value)
     return MCT_APP_FILTER_OARS_VALUE_MILD;
   else if (g_str_equal (appdata_value, "none"))
     return MCT_APP_FILTER_OARS_VALUE_NONE;
+  else if (g_str_equal (appdata_value, "unknown"))
+    return MCT_APP_FILTER_OARS_VALUE_UNKNOWN;
   else
     return MCT_APP_FILTER_OARS_VALUE_UNKNOWN;
 }
@@ -98,10 +100,10 @@ flatpak_oars_check_rating (GHashTable   *content_rating,
       !g_strv_contains (supported_rating_types, content_rating_type))
     return FALSE;
 
-  /* If the app has specified values for *some* OARS sections, assume that the
-   * other sections have a value of none. Otherwise, they are all unknown (which
-   * results in the app being deemed unsafe unless @filter is empty). */
-  if (content_rating != NULL && g_hash_table_size (content_rating) > 0)
+  /* If the app has a <content_rating/> element, even if it has no OARS sections
+   * in it, use a default value of `none` for any missing sections. Otherwise,
+   * if the app has no <content_rating/> element, use `unknown`. */
+  if (content_rating != NULL)
     default_rating_value = MCT_APP_FILTER_OARS_VALUE_NONE;
   else
     default_rating_value = MCT_APP_FILTER_OARS_VALUE_UNKNOWN;
@@ -111,9 +113,13 @@ flatpak_oars_check_rating (GHashTable   *content_rating,
       MctAppFilterOarsValue rating_value;
       MctAppFilterOarsValue filter_value = mct_app_filter_get_oars_value (filter,
                                                                           oars_sections[i]);
+      const gchar *appdata_value;
 
       if (content_rating != NULL)
-        rating_value = app_filter_oars_value_from_appdata (g_hash_table_lookup (content_rating, oars_sections[i]));
+        appdata_value = g_hash_table_lookup (content_rating, oars_sections[i]);
+
+      if (appdata_value != NULL)
+        rating_value = app_filter_oars_value_from_appdata (appdata_value);
       else
         rating_value = default_rating_value;
 
