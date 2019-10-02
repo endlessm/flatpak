@@ -7680,7 +7680,7 @@ flatpak_dir_check_parental_controls (FlatpakDir    *self,
     {
       /* FIXME: Instead of skipping the parental controls check in the test
        * environment, make a mock service for it.
-       * https://phabricator.endlessm.com/T25340 */
+       * https://github.com/flatpak/flatpak/issues/2993 */
       g_debug ("Skipping parental controls check for %s since the "
                "system bus is unavailable in the test environment", ref);
       return TRUE;
@@ -7744,7 +7744,10 @@ flatpak_dir_check_parental_controls (FlatpakDir    *self,
                                                   app_filter);
 
   if (repo_installation_allowed && app_is_appropriate)
-    return TRUE;
+    {
+      g_debug ("Parental controls policy satisfied for %s", ref);
+      return TRUE;
+    }
 
   /* Otherwise, check polkit to see if the admin is going to allow the user to
    * override their parental controls policy. We can’t pass any details to this
@@ -7769,6 +7772,8 @@ flatpak_dir_check_parental_controls (FlatpakDir    *self,
                                /* Translators: The placeholder is for an app ref. */
                                _("Installing %s is not allowed by the policy set by your administrator"),
                                ref);
+
+  g_debug ("Parental controls policy overridden by polkit for %s", ref);
 #endif  /* HAVE_LIBMALCONTENT */
 
   return TRUE;
