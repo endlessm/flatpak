@@ -1,22 +1,25 @@
-# British English translation for flatpak.
-# Copyright (C) 2019 flatpak's COPYRIGHT HOLDER
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR Flatpak team and others.
 # This file is distributed under the same license as the flatpak package.
-# Zander Brown <zbrown@gnome.org>, 2019.
-#
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+# 
+# Translators:
+# Will Thompson <wjt@endlessm.com>, 2019
+# 
+#, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: flatpak master\n"
+"Project-Id-Version: flatpak 1.4.399\n"
 "Report-Msgid-Bugs-To: https://github.com/flatpak/flatpak/issues\n"
 "POT-Creation-Date: 2019-10-04 15:00+0100\n"
-"PO-Revision-Date: 2019-08-24 23:27+0100\n"
-"Last-Translator: Zander Brown <zbrown@gnome.org>\n"
-"Language-Team: English - United Kingdom <en_GB@li.org>\n"
-"Language: en_GB\n"
+"PO-Revision-Date: 2019-01-08 12:00+0000\n"
+"Last-Translator: Will Thompson <wjt@endlessm.com>, 2019\n"
+"Language-Team: English (United Kingdom) (https://www.transifex.com/endless-os/teams/9016/en_GB/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Language: en_GB\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
-"X-Generator: Gtranslator 3.32.1\n"
 
 #: app/flatpak-builtins-build-bundle.c:57
 msgid "Export runtime instead of app"
@@ -66,7 +69,8 @@ msgstr "Add GPG key from FILE (- for stdin)"
 #: app/flatpak-builtins-build-export.c:63
 #: app/flatpak-builtins-build-update-repo.c:69
 #: app/flatpak-builtins-install.c:69 app/flatpak-builtins-remote-add.c:75
-#: app/flatpak-builtins-remote-add.c:76 app/flatpak-builtins-remote-modify.c:81
+#: app/flatpak-builtins-remote-add.c:76
+#: app/flatpak-builtins-remote-modify.c:81
 #: app/flatpak-builtins-remote-modify.c:83
 msgid "FILE"
 msgstr "FILE"
@@ -106,8 +110,8 @@ msgstr "HOMEDIR"
 msgid "OSTree commit to create a delta bundle from"
 msgstr "OSTree commit to create a delta bundle from"
 
-#: app/flatpak-builtins-build-bundle.c:64 app/flatpak-builtins-remote-info.c:52
-#: app/flatpak-builtins-update.c:56
+#: app/flatpak-builtins-build-bundle.c:64
+#: app/flatpak-builtins-remote-info.c:52 app/flatpak-builtins-update.c:56
 msgid "COMMIT"
 msgstr "COMMIT"
 
@@ -164,15 +168,17 @@ msgstr "'%s' is not a valid repository"
 msgid "'%s' is not a valid repository: "
 msgstr "'%s' is not a valid repository: "
 
-#: app/flatpak-builtins-build-bundle.c:663 app/flatpak-builtins-build-sign.c:87
-#: common/flatpak-dir.c:11371 common/flatpak-utils.c:1532
+#: app/flatpak-builtins-build-bundle.c:663
+#: app/flatpak-builtins-build-sign.c:87 common/flatpak-dir.c:11371
+#: common/flatpak-utils.c:1532
 #, c-format
 msgid "'%s' is not a valid name: %s"
 msgstr "'%s' is not a valid name: %s"
 
 #: app/flatpak-builtins-build-bundle.c:666
-#: app/flatpak-builtins-build-export.c:821 app/flatpak-builtins-build-sign.c:90
-#: common/flatpak-dir.c:11377 common/flatpak-utils.c:1538
+#: app/flatpak-builtins-build-export.c:821
+#: app/flatpak-builtins-build-sign.c:90 common/flatpak-dir.c:11377
+#: common/flatpak-utils.c:1538
 #, c-format
 msgid "'%s' is not a valid branch name: %s"
 msgstr "'%s' is not a valid branch name: %s"
@@ -361,9 +367,11 @@ msgstr "DST-REPO must be specified"
 
 #: app/flatpak-builtins-build-commit-from.c:260
 msgid ""
-"If --src-repo is not specified, exactly one destination ref must be specified"
+"If --src-repo is not specified, exactly one destination ref must be "
+"specified"
 msgstr ""
-"If --src-repo is not specified, exactly one destination ref must be specified"
+"If --src-repo is not specified, exactly one destination ref must be "
+"specified"
 
 #: app/flatpak-builtins-build-commit-from.c:263
 msgid ""
@@ -891,7 +899,8 @@ msgid "A nice name to use for this repository"
 msgstr "A nice name to use for this repository"
 
 #: app/flatpak-builtins-build-update-repo.c:61
-#: app/flatpak-builtins-remote-add.c:68 app/flatpak-builtins-remote-modify.c:74
+#: app/flatpak-builtins-remote-add.c:68
+#: app/flatpak-builtins-remote-modify.c:74
 msgid "TITLE"
 msgstr "TITLE"
 
@@ -900,7 +909,8 @@ msgid "A one-line comment for this repository"
 msgstr "A one-line comment for this repository"
 
 #: app/flatpak-builtins-build-update-repo.c:62
-#: app/flatpak-builtins-remote-add.c:69 app/flatpak-builtins-remote-modify.c:75
+#: app/flatpak-builtins-remote-add.c:69
+#: app/flatpak-builtins-remote-modify.c:75
 msgid "COMMENT"
 msgstr "COMMENT"
 
@@ -909,7 +919,8 @@ msgid "A full-paragraph description for this repository"
 msgstr "A full-paragraph description for this repository"
 
 #: app/flatpak-builtins-build-update-repo.c:63
-#: app/flatpak-builtins-remote-add.c:70 app/flatpak-builtins-remote-modify.c:76
+#: app/flatpak-builtins-remote-add.c:70
+#: app/flatpak-builtins-remote-modify.c:76
 msgid "DESCRIPTION"
 msgstr "DESCRIPTION"
 
@@ -926,14 +937,15 @@ msgid "Default branch to use for this repository"
 msgstr "Default branch to use for this repository"
 
 #: app/flatpak-builtins-build-update-repo.c:66
-#: app/flatpak-builtins-remote-add.c:73 app/flatpak-builtins-remote-modify.c:79
-#: app/flatpak-builtins-repo.c:403 app/flatpak-builtins-repo.c:404
-#: app/flatpak-builtins-run.c:62
+#: app/flatpak-builtins-remote-add.c:73
+#: app/flatpak-builtins-remote-modify.c:79 app/flatpak-builtins-repo.c:403
+#: app/flatpak-builtins-repo.c:404 app/flatpak-builtins-run.c:62
 msgid "BRANCH"
 msgstr "BRANCH"
 
 #: app/flatpak-builtins-build-update-repo.c:67
-#: app/flatpak-builtins-remote-add.c:74 app/flatpak-builtins-remote-modify.c:80
+#: app/flatpak-builtins-remote-add.c:74
+#: app/flatpak-builtins-remote-modify.c:80
 msgid "COLLECTION-ID"
 msgstr "COLLECTION-ID"
 
@@ -1152,8 +1164,7 @@ msgstr "Warning: Couldn't update repo metadata for remote ‘%s’: %s\n"
 #: app/flatpak-builtins-create-usb.c:695
 #, c-format
 msgid "Warning: Couldn't update appstream data for remote ‘%s’ arch ‘%s’: %s\n"
-msgstr ""
-"Warning: Couldn't update appstream data for remote ‘%s’ arch ‘%s’: %s\n"
+msgstr "Warning: Couldn't update appstream data for remote ‘%s’ arch ‘%s’: %s\n"
 
 #. Print a warning if both appstream and appstream2 are missing
 #: app/flatpak-builtins-create-usb.c:728
@@ -1300,7 +1311,8 @@ msgid "FILE - Unexport a file to apps"
 msgstr "FILE - Unexport a file to apps"
 
 #: app/flatpak-builtins-enter.c:81
-msgid "INSTANCE [COMMAND [ARGUMENT…]] - Run a command inside a running sandbox"
+msgid ""
+"INSTANCE [COMMAND [ARGUMENT…]] - Run a command inside a running sandbox"
 msgstr ""
 "INSTANCE [COMMAND [ARGUMENT…]] - Run a command inside a running sandbox"
 
@@ -2119,59 +2131,73 @@ msgstr "Do nothing if the provided remote exists"
 msgid "LOCATION specifies a configuration file, not the repo location"
 msgstr "LOCATION specifies a configuration file, not the repo location"
 
-#: app/flatpak-builtins-remote-add.c:64 app/flatpak-builtins-remote-modify.c:70
+#: app/flatpak-builtins-remote-add.c:64
+#: app/flatpak-builtins-remote-modify.c:70
 msgid "Disable GPG verification"
 msgstr "Disable GPG verification"
 
-#: app/flatpak-builtins-remote-add.c:65 app/flatpak-builtins-remote-modify.c:71
+#: app/flatpak-builtins-remote-add.c:65
+#: app/flatpak-builtins-remote-modify.c:71
 msgid "Mark the remote as don't enumerate"
 msgstr "Mark the remote as don't enumerate"
 
-#: app/flatpak-builtins-remote-add.c:66 app/flatpak-builtins-remote-modify.c:72
+#: app/flatpak-builtins-remote-add.c:66
+#: app/flatpak-builtins-remote-modify.c:72
 msgid "Mark the remote as don't use for deps"
 msgstr "Mark the remote as don't use for deps"
 
-#: app/flatpak-builtins-remote-add.c:67 app/flatpak-builtins-remote-modify.c:73
+#: app/flatpak-builtins-remote-add.c:67
+#: app/flatpak-builtins-remote-modify.c:73
 msgid "Set priority (default 1, higher is more prioritized)"
 msgstr "Set priority (default 1, higher is more prioritised)"
 
-#: app/flatpak-builtins-remote-add.c:67 app/flatpak-builtins-remote-modify.c:73
+#: app/flatpak-builtins-remote-add.c:67
+#: app/flatpak-builtins-remote-modify.c:73
 msgid "PRIORITY"
 msgstr "PRIORITY"
 
-#: app/flatpak-builtins-remote-add.c:68 app/flatpak-builtins-remote-modify.c:74
+#: app/flatpak-builtins-remote-add.c:68
+#: app/flatpak-builtins-remote-modify.c:74
 msgid "A nice name to use for this remote"
 msgstr "A nice name to use for this remote"
 
-#: app/flatpak-builtins-remote-add.c:69 app/flatpak-builtins-remote-modify.c:75
+#: app/flatpak-builtins-remote-add.c:69
+#: app/flatpak-builtins-remote-modify.c:75
 msgid "A one-line comment for this remote"
 msgstr "A one-line comment for this remote"
 
-#: app/flatpak-builtins-remote-add.c:70 app/flatpak-builtins-remote-modify.c:76
+#: app/flatpak-builtins-remote-add.c:70
+#: app/flatpak-builtins-remote-modify.c:76
 msgid "A full-paragraph description for this remote"
 msgstr "A full-paragraph description for this remote"
 
-#: app/flatpak-builtins-remote-add.c:71 app/flatpak-builtins-remote-modify.c:77
+#: app/flatpak-builtins-remote-add.c:71
+#: app/flatpak-builtins-remote-modify.c:77
 msgid "URL for a website for this remote"
 msgstr "URL for a website for this remote"
 
-#: app/flatpak-builtins-remote-add.c:72 app/flatpak-builtins-remote-modify.c:78
+#: app/flatpak-builtins-remote-add.c:72
+#: app/flatpak-builtins-remote-modify.c:78
 msgid "URL for an icon for this remote"
 msgstr "URL for an icon for this remote"
 
-#: app/flatpak-builtins-remote-add.c:73 app/flatpak-builtins-remote-modify.c:79
+#: app/flatpak-builtins-remote-add.c:73
+#: app/flatpak-builtins-remote-modify.c:79
 msgid "Default branch to use for this remote"
 msgstr "Default branch to use for this remote"
 
-#: app/flatpak-builtins-remote-add.c:75 app/flatpak-builtins-remote-modify.c:81
+#: app/flatpak-builtins-remote-add.c:75
+#: app/flatpak-builtins-remote-modify.c:81
 msgid "Import GPG key from FILE (- for stdin)"
 msgstr "Import GPG key from FILE (- for stdin)"
 
-#: app/flatpak-builtins-remote-add.c:76 app/flatpak-builtins-remote-modify.c:83
+#: app/flatpak-builtins-remote-add.c:76
+#: app/flatpak-builtins-remote-modify.c:83
 msgid "Set path to local filter FILE"
 msgstr "Set path to local filter FILE"
 
-#: app/flatpak-builtins-remote-add.c:77 app/flatpak-builtins-remote-modify.c:84
+#: app/flatpak-builtins-remote-add.c:77
+#: app/flatpak-builtins-remote-modify.c:84
 msgid "Disable the remote"
 msgstr "Disable the remote"
 
@@ -2841,7 +2867,8 @@ msgstr "Which do you want to use (0 to abort)?"
 
 #: app/flatpak-builtins-utils.c:354
 #, c-format
-msgid "No remote chosen to resolve ‘%s’ which exists in multiple installations"
+msgid ""
+"No remote chosen to resolve ‘%s’ which exists in multiple installations"
 msgstr ""
 "No remote chosen to resolve ‘%s’ which exists in multiple installations"
 
@@ -2988,12 +3015,10 @@ msgstr "Configuring %s as new remote '%s'"
 #: app/flatpak-cli-transaction.c:126
 #, c-format
 msgid ""
-"The remote '%s', referred to by '%s' at location %s contains additional "
-"applications.\n"
+"The remote '%s', referred to by '%s' at location %s contains additional applications.\n"
 "Should the remote be kept for future installations?"
 msgstr ""
-"The remote '%s', referred to by '%s' at location %s contains additional "
-"applications.\n"
+"The remote '%s', referred to by '%s' at location %s contains additional applications.\n"
 "Should the remote be kept for future installations?"
 
 #. default to yes on Enter
@@ -3139,7 +3164,6 @@ msgstr "Op"
 
 #. Avoid resizing the download column too much,
 #. * by making the title as long as typical content
-#.
 #: app/flatpak-cli-transaction.c:913 app/flatpak-cli-transaction.c:952
 msgid "partial"
 msgstr "partial"
@@ -3173,7 +3197,8 @@ msgstr "Installation complete."
 msgid "Updates complete."
 msgstr "Updates complete."
 
-#. For updates/!stop_on_first_error we already printed all errors so we make up
+#. For updates/!stop_on_first_error we already printed all errors so we make
+#. up
 #. a different one.
 #: app/flatpak-cli-transaction.c:1158
 msgid "There were one or more errors"
@@ -3446,29 +3471,31 @@ msgstr "Builtin Commands:"
 #, c-format
 msgid ""
 "Note that the directories %s are not in the search path set by the "
-"XDG_DATA_DIRS environment variable, so applications installed by Flatpak may "
-"not appear on your desktop until the session is restarted."
+"XDG_DATA_DIRS environment variable, so applications installed by Flatpak may"
+" not appear on your desktop until the session is restarted."
 msgstr ""
 "Note that the directories %s are not in the search path set by the "
-"XDG_DATA_DIRS environment variable, so applications installed by Flatpak may "
-"not appear on your desktop until the session is restarted."
+"XDG_DATA_DIRS environment variable, so applications installed by Flatpak may"
+" not appear on your desktop until the session is restarted."
 
 #: app/flatpak-main.c:298
 #, c-format
 msgid ""
 "Note that the directory %s is not in the search path set by the "
-"XDG_DATA_DIRS environment variable, so applications installed by Flatpak may "
-"not appear on your desktop until the session is restarted."
+"XDG_DATA_DIRS environment variable, so applications installed by Flatpak may"
+" not appear on your desktop until the session is restarted."
 msgstr ""
 "Note that the directory %s is not in the search path set by the "
-"XDG_DATA_DIRS environment variable, so applications installed by Flatpak may "
-"not appear on your desktop until the session is restarted."
+"XDG_DATA_DIRS environment variable, so applications installed by Flatpak may"
+" not appear on your desktop until the session is restarted."
 
 #: app/flatpak-main.c:427
 msgid ""
-"Multiple installations specified for a command that works on one installation"
+"Multiple installations specified for a command that works on one "
+"installation"
 msgstr ""
-"Multiple installations specified for a command that works on one installation"
+"Multiple installations specified for a command that works on one "
+"installation"
 
 #: app/flatpak-main.c:476 app/flatpak-main.c:658
 #, c-format
@@ -3476,9 +3503,9 @@ msgid "See '%s --help'"
 msgstr "See '%s --help'"
 
 #: app/flatpak-main.c:667
-#, fuzzy, c-format
+#, c-format
 msgid "'%s' is not a flatpak command. Did you mean '%s%s'?"
-msgstr "'%s' is not a flatpak command. Did you mean '%s'?"
+msgstr ""
 
 #: app/flatpak-main.c:670
 #, c-format
@@ -3700,15 +3727,16 @@ msgstr "Persist home directory"
 msgid "FILENAME"
 msgstr "FILENAME"
 
-#. This is not needed/used anymore, so hidden, but we accept it for backwards compat
+#. This is not needed/used anymore, so hidden, but we accept it for backwards
+#. compat
 #: common/flatpak-context.c:1247
 msgid "Don't require a running session (no cgroups creation)"
 msgstr "Don't require a running session (no cgroups creation)"
 
 #: common/flatpak-dir.c:316
-#, fuzzy, c-format
+#, c-format
 msgid "Unable to load summary from remote %s: "
-msgstr "Unable to load summary from remote %s: %s"
+msgstr ""
 
 #: common/flatpak-dir.c:320
 #, c-format
@@ -3716,9 +3744,9 @@ msgid "Unable to load summary from remote %s: %s"
 msgstr "Unable to load summary from remote %s: %s"
 
 #: common/flatpak-dir.c:344 common/flatpak-dir.c:355
-#, fuzzy, c-format
+#, c-format
 msgid "Unable to load metadata from remote %s: "
-msgstr "Unable to load metadata from remote %s: %s"
+msgstr ""
 
 #: common/flatpak-dir.c:363
 #, c-format
@@ -3837,9 +3865,9 @@ msgid "Unsupported extra data uri %s"
 msgstr "Unsupported extra data uri %s"
 
 #: common/flatpak-dir.c:4948
-#, fuzzy, c-format
+#, c-format
 msgid "Failed to load local extra-data %s: "
-msgstr "Failed to load local extra-data %s: %s"
+msgstr ""
 
 #: common/flatpak-dir.c:4953
 #, c-format
@@ -4280,9 +4308,8 @@ msgid "No url specified"
 msgstr "No url specified"
 
 #: common/flatpak-remote.c:1304
-#, fuzzy
 msgid "GPG verification must be enabled when a collection ID is set"
-msgstr "GPG verification is required if collections are enabled"
+msgstr ""
 
 #: common/flatpak-run.c:742
 msgid "Failed to open app info file"
@@ -4915,11 +4942,7 @@ msgid "Override parental controls"
 msgstr ""
 
 #: system-helper/org.freedesktop.Flatpak.policy.in:286
-#, fuzzy
 msgid ""
 "Authentication is required to install software which is restricted by your "
 "parental controls policy"
-msgstr "Authentication is required to install software from $(path)"
-
-#~ msgid "Default system installation"
-#~ msgstr "Default system installation"
+msgstr ""
