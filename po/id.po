@@ -4031,6 +4031,8 @@ msgstr "Skrip apply_extra gagal, status keluar %d"
 #, c-format
 msgid "Installing %s is not allowed by the policy set by your administrator"
 msgstr ""
+"Instalasi %s tidak diizinkan oleh kebijakan yang ditetapkan oleh "
+"administrator Anda"
 
 #: common/flatpak-dir.c:7862
 #, c-format

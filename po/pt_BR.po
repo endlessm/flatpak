@@ -4035,7 +4035,7 @@ msgstr "script apply_extra falhou, status de saída %d"
 #: common/flatpak-dir.c:7773
 #, c-format
 msgid "Installing %s is not allowed by the policy set by your administrator"
-msgstr ""
+msgstr "Instalar %s não é permitido pela política definida pelo administrador"
 
 #: common/flatpak-dir.c:7862
 #, c-format
