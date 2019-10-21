@@ -1,3 +1,11 @@
+flatpak (1.5.0-1endless1) eos; urgency=medium
+
+  * Rebase against upstream 1.5.0 release (T28028)
+    - Drop various patches upstreamed between 1.4.3 and 1.5.0
+    - Add socat as a dependency of the tests
+
+ -- Philip Withnall <withnall@endlessm.com>  Mon, 21 Oct 2019 17:31:00 +0100
+
 flatpak (1.4.99-1endless1) eos; urgency=medium
 
   * Rebase against upstream master (commit a641bb76)
