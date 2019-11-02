@@ -4617,6 +4617,7 @@ repo_pull (OstreeRepo                           *self,
       OstreeCollectionRef *collection_refs_to_fetch[2];
       guint32 update_freq = 0;
       g_autoptr(GMainContextPopDefault) context = NULL;
+      g_autoptr(FlatpakAsyncProgressChained) chained_progress = NULL;
 
       pulled_using_p2p = TRUE;
 
@@ -4624,6 +4625,7 @@ repo_pull (OstreeRepo                           *self,
       collection_ref.ref_name = (char *) ref_to_fetch;
 
       context = flatpak_main_context_new_default ();
+      chained_progress = flatpak_progress_chain (progress);
 
       if (results_to_fetch == NULL)
         {
@@ -4660,7 +4662,8 @@ repo_pull (OstreeRepo                           *self,
 
           ostree_repo_find_remotes_async (self, (const OstreeCollectionRef * const *) collection_refs_to_fetch,
                                           find_options,
-                                          NULL /* default finders */, progress, cancellable,
+                                          NULL /* default finders */,
+                                          chained_progress, cancellable,
                                           async_result_cb, &find_result);
 
           while (find_result == NULL)
@@ -4695,7 +4698,7 @@ repo_pull (OstreeRepo                           *self,
           pull_options = g_variant_ref_sink (g_variant_builder_end (&pull_builder));
 
           ostree_repo_pull_from_remotes_async (self, results_to_fetch,
-                                               pull_options, progress,
+                                               pull_options, chained_progress,
                                                cancellable, async_result_cb,
                                                &pull_result);
 
@@ -5414,6 +5417,7 @@ flatpak_dir_pull (FlatpakDir                           *self,
           gboolean force_disable_deltas = (flatpak_flags & FLATPAK_PULL_FLAGS_NO_STATIC_DELTAS) != 0;
           guint update_freq = 0;
           g_autoptr(GMainContextPopDefault) context = NULL;
+          g_autoptr(FlatpakAsyncProgressChained) chained_progress = NULL;
 
           /* FIXME: It would be nice to break out a helper function from
            * flatpak_dir_do_resolve_p2p_refs() that would resolve refs to
@@ -5444,10 +5448,12 @@ flatpak_dir_pull (FlatpakDir                           *self,
           find_options = g_variant_ref_sink (g_variant_builder_end (&find_builder));
 
           context = flatpak_main_context_new_default ();
+          chained_progress = flatpak_progress_chain (progress);
 
           ostree_repo_find_remotes_async (repo, (const OstreeCollectionRef * const *) collection_refs_to_fetch,
                                           find_options,
-                                          NULL /* default finders */, progress, cancellable,
+                                          NULL /* default finders */,
+                                          chained_progress, cancellable,
                                           async_result_cb, &find_result);
 
           while (find_result == NULL)
@@ -5477,7 +5483,7 @@ flatpak_dir_pull (FlatpakDir                           *self,
               if (!repo_pull (repo, state->remote_name,
                               NULL, ref, NULL, results,
                               flatpak_flags, metadata_pull_flags,
-                              progress, cancellable, error))
+                              chained_progress, cancellable, error))
                 {
                   g_prefix_error (error, _("While pulling %s from remote %s: "), ref, state->remote_name);
                   goto out;
