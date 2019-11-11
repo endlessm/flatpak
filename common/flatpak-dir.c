@@ -4900,8 +4900,6 @@ reset_async_progress_extra_data (OstreeAsyncProgress *progress)
 static gboolean
 flatpak_dir_pull_extra_data (FlatpakDir          *self,
                              OstreeRepo          *repo,
-                             const char          *repository,
-                             const char          *ref,
                              const char          *rev,
                              FlatpakPullFlags     flatpak_flags,
                              OstreeAsyncProgress *progress,
@@ -5562,9 +5560,7 @@ flatpak_dir_pull (FlatpakDir                           *self,
       goto out;
     }
 
-  if (!flatpak_dir_pull_extra_data (self, repo,
-                                    state->remote_name,
-                                    ref, rev,
+  if (!flatpak_dir_pull_extra_data (self, repo, rev,
                                     flatpak_flags,
                                     progress,
                                     cancellable,
