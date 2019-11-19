@@ -1,3 +1,10 @@
+flatpak (1.5.0-1endless1buster1) buster; urgency=medium
+
+  * Drop malcontent build dependency as it's not in debian and we have no
+    need for it in the infrastructure. (T28645)
+
+ -- Dan Nicholson <nicholson@endlessm.com>  Tue, 19 Nov 2019 14:08:16 -0700
+
 flatpak (1.5.0-1endless1) eos; urgency=medium
 
   * Rebase against upstream 1.5.0 release (T28028)
