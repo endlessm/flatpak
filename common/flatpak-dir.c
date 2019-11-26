@@ -4572,8 +4572,8 @@ repo_pull (OstreeRepo                           *self,
            const char                           *remote_name,
            const char                          **dirs_to_pull,
            const char                           *ref_to_fetch,
-           const char                           *rev_to_fetch, /* (nullable) */
-           const OstreeRepoFinderResult * const *results_to_fetch, /* (nullable) */
+           const char                           *rev_to_fetch,
+           const OstreeRepoFinderResult * const *results_to_fetch,
            FlatpakPullFlags                      flatpak_flags,
            OstreeRepoPullFlags                   flags,
            OstreeAsyncProgress                  *progress,
@@ -4582,19 +4582,19 @@ repo_pull (OstreeRepo                           *self,
 {
   gboolean force_disable_deltas = (flatpak_flags & FLATPAK_PULL_FLAGS_NO_STATIC_DELTAS) != 0;
   g_autofree char *current_checksum = NULL;
-  g_autofree char *owned_rev_to_fetch = g_strdup (rev_to_fetch);
   g_autoptr(GVariant) old_commit = NULL;
   g_autoptr(GVariant) new_commit = NULL;
   const char *revs_to_fetch[2];
   gboolean res = FALSE;
   g_autofree gchar *collection_id = NULL;
   g_autoptr(GError) dummy_error = NULL;
-  gboolean pulled_using_p2p = FALSE;
-  OstreeCollectionRef collection_ref;
 
   /* The ostree fetcher asserts if error is NULL */
   if (error == NULL)
     error = &dummy_error;
+
+  /* If @results_to_fetch is set, @rev_to_fetch must be. */
+  g_assert (results_to_fetch == NULL || rev_to_fetch != NULL);
 
   /* We always want this on for every type of pull */
   flags |= OSTREE_REPO_PULL_FLAGS_BAREUSERONLY_FILES;
@@ -4614,15 +4614,11 @@ repo_pull (OstreeRepo                           *self,
     {
       g_autoptr(GAsyncResult) find_result = NULL, pull_result = NULL;
       g_auto(OstreeRepoFinderResultv) results = NULL;
+      OstreeCollectionRef collection_ref;
       OstreeCollectionRef *collection_refs_to_fetch[2];
       guint32 update_freq = 0;
       g_autoptr(GMainContextPopDefault) context = NULL;
       g_autoptr(FlatpakAsyncProgressChained) chained_progress = NULL;
-
-      pulled_using_p2p = TRUE;
-
-      collection_ref.collection_id = collection_id;
-      collection_ref.ref_name = (char *) ref_to_fetch;
 
       context = flatpak_main_context_new_default ();
       chained_progress = flatpak_progress_chain (progress);
@@ -4641,6 +4637,9 @@ repo_pull (OstreeRepo                           *self,
                                      g_variant_new_variant (g_variant_new_boolean (TRUE)));
             }
 
+          collection_ref.collection_id = collection_id;
+          collection_ref.ref_name = (char *) ref_to_fetch;
+
           collection_refs_to_fetch[0] = &collection_ref;
           collection_refs_to_fetch[1] = NULL;
 
@@ -4652,10 +4651,10 @@ repo_pull (OstreeRepo                           *self,
           g_variant_builder_add (&find_builder, "{s@v}", "update-frequency",
                                  g_variant_new_variant (g_variant_new_uint32 (update_freq)));
 
-          if (owned_rev_to_fetch != NULL)
+          if (rev_to_fetch != NULL)
             {
               g_variant_builder_add (&find_builder, "{s@v}", "override-commit-ids",
-                                     g_variant_new_variant (g_variant_new_strv ((const char * const *)&owned_rev_to_fetch, 1)));
+                                     g_variant_new_variant (g_variant_new_strv (&rev_to_fetch, 1)));
             }
 
           find_options = g_variant_ref_sink (g_variant_builder_end (&find_builder));
@@ -4718,7 +4717,6 @@ repo_pull (OstreeRepo                           *self,
       if (error != NULL && *error != NULL)
         g_debug ("Failed to pull using find-remotes; falling back to normal pull: %s", (*error)->message);
       g_clear_error (error);
-      pulled_using_p2p = FALSE;
     }
 
   if (!res)
@@ -4737,13 +4735,10 @@ repo_pull (OstreeRepo                           *self,
       g_variant_builder_add (&builder, "{s@v}", "refs",
                              g_variant_new_variant (g_variant_new_strv ((const char * const *) refs_to_fetch, -1)));
 
-      if (owned_rev_to_fetch)
-        {
-          revs_to_fetch[0] = owned_rev_to_fetch;
-          revs_to_fetch[1] = NULL;
-          g_variant_builder_add (&builder, "{s@v}", "override-commit-ids",
-                                 g_variant_new_variant (g_variant_new_strv ((const char * const *) revs_to_fetch, -1)));
-        }
+      revs_to_fetch[0] = rev_to_fetch;
+      revs_to_fetch[1] = NULL;
+      g_variant_builder_add (&builder, "{s@v}", "override-commit-ids",
+                             g_variant_new_variant (g_variant_new_strv ((const char * const *) revs_to_fetch, -1)));
 
       options = g_variant_ref_sink (g_variant_builder_end (&builder));
 
@@ -4752,21 +4747,13 @@ repo_pull (OstreeRepo                           *self,
         return translate_ostree_repo_pull_errors (error);
     }
 
-  if (owned_rev_to_fetch == NULL)
-    {
-      if (!flatpak_repo_resolve_rev (self, pulled_using_p2p ? collection_id : NULL,
-                                     remote_name, ref_to_fetch, FALSE, &owned_rev_to_fetch,
-                                     cancellable, error))
-        return FALSE;
-    }
-
   if (old_commit &&
       (flatpak_flags & FLATPAK_PULL_FLAGS_ALLOW_DOWNGRADE) == 0)
     {
       guint64 old_timestamp;
       guint64 new_timestamp;
 
-      if (!ostree_repo_load_commit (self, owned_rev_to_fetch, &new_commit, NULL, error))
+      if (!ostree_repo_load_commit (self, rev_to_fetch, &new_commit, NULL, error))
         return FALSE;
 
       old_timestamp = ostree_commit_get_timestamp (old_commit);
@@ -5357,10 +5344,6 @@ flatpak_dir_pull (FlatpakDir                           *self,
   /* If @opt_results is set, @opt_rev must be. */
   g_return_val_if_fail (opt_results == NULL || opt_rev != NULL, FALSE);
 
-  /* @repo should either be NULL or a child repo. If the repo is not a child it
-   * doesn't make sense to use it in the find_remotes_async() call below. */
-  g_return_val_if_fail (repo == NULL || ostree_repo_equal (ostree_repo_get_parent (repo), self->repo), FALSE);
-
   if (!flatpak_dir_ensure_repo (self, cancellable, error))
     return FALSE;
 
@@ -5388,15 +5371,6 @@ flatpak_dir_pull (FlatpakDir                           *self,
 
   g_assert (progress != NULL);
 
-  if (repo == NULL)
-    repo = self->repo;
-
-  /* Past this we must use goto out, so we clean up console and
-     abort the transaction on error */
-
-  if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
-    goto out;
-
   /* We get the rev ahead of time so that we know it for looking up e.g. extra-data
      and to make sure we're atomically using a single rev if we happen to do multiple
      pulls (e.g. with subpaths) */
@@ -5416,6 +5390,7 @@ flatpak_dir_pull (FlatpakDir                           *self,
           OstreeCollectionRef *collection_refs_to_fetch[2];
           gboolean force_disable_deltas = (flatpak_flags & FLATPAK_PULL_FLAGS_NO_STATIC_DELTAS) != 0;
           guint update_freq = 0;
+          gsize i;
           g_autoptr(GMainContextPopDefault) context = NULL;
           g_autoptr(FlatpakAsyncProgressChained) chained_progress = NULL;
 
@@ -5450,7 +5425,7 @@ flatpak_dir_pull (FlatpakDir                           *self,
           context = flatpak_main_context_new_default ();
           chained_progress = flatpak_progress_chain (progress);
 
-          ostree_repo_find_remotes_async (repo, (const OstreeCollectionRef * const *) collection_refs_to_fetch,
+          ostree_repo_find_remotes_async (self->repo, (const OstreeCollectionRef * const *) collection_refs_to_fetch,
                                           find_options,
                                           NULL /* default finders */,
                                           chained_progress, cancellable,
@@ -5459,73 +5434,44 @@ flatpak_dir_pull (FlatpakDir                           *self,
           while (find_result == NULL)
             g_main_context_iteration (context, TRUE);
 
-          allocated_results = ostree_repo_find_remotes_finish (repo, find_result, error);
+          allocated_results = ostree_repo_find_remotes_finish (self->repo, find_result, error);
 
           results = (const OstreeRepoFinderResult * const *) allocated_results;
           if (results == NULL)
-            goto out;
+            return FALSE;
 
-          /* Do a version check to ensure we have these:
-           * https://github.com/ostreedev/ostree/pull/1821
-           * https://github.com/ostreedev/ostree/pull/1825 */
-#if OSTREE_CHECK_VERSION (2019, 2)
-          /* Go ahead and pull commit metadata now, so that if any of the
-           * signatures are bad we can fall back to another rev from another
-           * result. This also means the flatpak_dir_setup_extra_data() call
-           * below won't need to fetch the metadata. For an explanation of the
-           * attack we're protecting against see
-           * https://github.com/flatpak/flatpak/issues/1447#issuecomment-445347590 */
-          if (results[0] != NULL)
-            {
-              OstreeRepoPullFlags metadata_pull_flags = flags | OSTREE_REPO_PULL_FLAGS_COMMIT_ONLY;
-              /*TODO: Use OSTREE_REPO_PULL_FLAGS_MIRROR for all collection-ref pulls */
-              metadata_pull_flags |= OSTREE_REPO_PULL_FLAGS_MIRROR;
-              if (!repo_pull (repo, state->remote_name,
-                              NULL, ref, NULL, results,
-                              flatpak_flags, metadata_pull_flags,
-                              chained_progress, cancellable, error))
-                {
-                  g_prefix_error (error, _("While pulling %s from remote %s: "), ref, state->remote_name);
-                  goto out;
-                }
-
-              if (!flatpak_repo_resolve_rev (repo, collection_ref.collection_id,
-                                             state->remote_name, ref, TRUE, &rev,
-                                             cancellable, error))
-                goto out;
-            }
-#else
-          gsize i;
           for (i = 0, rev = NULL; results[i] != NULL && rev == NULL; i++)
             rev = g_strdup (g_hash_table_lookup (results[i]->ref_to_checksum, &collection_ref));
-#endif
 
           if (rev == NULL)
-            {
-              g_set_error (error, FLATPAK_ERROR, FLATPAK_ERROR_REF_NOT_FOUND, _("No such ref (%s, %s) in remote %s or elsewhere"),
-                           collection_ref.collection_id, collection_ref.ref_name, state->remote_name);
-              goto out;
-            }
+            return flatpak_fail_error (error, FLATPAK_ERROR_REF_NOT_FOUND, _("No such ref (%s, %s) in remote %s or elsewhere"),
+                                       collection_ref.collection_id, collection_ref.ref_name, state->remote_name);
         }
       else
         {
-          if (!flatpak_remote_state_lookup_ref (state, ref, &rev, NULL, error))
-            goto out;
-          if (rev == NULL)
-            {
-              flatpak_fail_error (error, FLATPAK_ERROR_REF_NOT_FOUND,
-                                  _("Couldn't find latest checksum for ref %s in remote %s"),
-                                  ref, state->remote_name);
-              goto out;
-            }
+          flatpak_remote_state_lookup_ref (state, ref, &rev, NULL, error);
+          if (rev == NULL && error != NULL && *error == NULL)
+            flatpak_fail_error (error, FLATPAK_ERROR_REF_NOT_FOUND, _("Couldn't find latest checksum for ref %s in remote %s"),
+                                ref, state->remote_name);
 
           results = NULL;
         }
+
+      if (rev == NULL)
+        {
+          g_assert (error == NULL || *error != NULL);
+          return FALSE;
+        }
     }
 
-  g_assert (rev != NULL);
   g_debug ("%s: Using commit %s for pull of ref %s from remote %s",
            G_STRFUNC, rev, ref, state->remote_name);
+
+  if (repo == NULL)
+    repo = self->repo;
+
+  /* Past this we must use goto out, so we clean up console and
+     abort the transaction on error */
 
   if (subpaths != NULL && subpaths[0] != NULL)
     {
@@ -5537,6 +5483,9 @@ flatpak_dir_pull (FlatpakDir                           *self,
                          g_build_filename ("/files", subpaths[i], NULL));
       g_ptr_array_add (subdirs_arg, NULL);
     }
+
+  if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
+    goto out;
 
   /* Setup extra data information before starting to pull, so we can have precise
    * progress reports */
@@ -9750,6 +9699,14 @@ flatpak_dir_update (FlatpakDir                           *self,
                              NULL, flatpak_flags, OSTREE_REPO_PULL_FLAGS_NONE,
                              progress, cancellable, error))
         return FALSE;
+
+      /* Take this opportunity to clean up refs/mirrors/ since a prune will happen
+       * after this update operation. See
+       * https://github.com/flatpak/flatpak/issues/3222
+       * Note: For the system-helper case we do this in handle_deploy()
+       */
+      if (!flatpak_dir_delete_mirror_refs (self, FALSE, cancellable, error))
+        return FALSE;
     }
 
   if (!no_deploy)
@@ -9876,6 +9833,13 @@ flatpak_dir_uninstall (FlatpakDir                 *self,
 
   if (!keep_ref &&
       !flatpak_dir_remove_ref (self, repository, ref, cancellable, error))
+    return FALSE;
+
+  /* Take this opportunity to clean up refs/mirrors/ since a prune will happen
+   * after this uninstall operation. See
+   * https://github.com/flatpak/flatpak/issues/3222
+   */
+  if (!flatpak_dir_delete_mirror_refs (self, FALSE, cancellable, error))
     return FALSE;
 
   if (is_app &&
@@ -14873,4 +14837,93 @@ static void
                    "URL=%s", url ? url : "",
                    NULL);
 #endif
+}
+
+/* Delete refs that are in refs/mirrors/ rather than refs/remotes/ to prevent
+ * disk space from leaking. See https://github.com/flatpak/flatpak/issues/3222
+ * The caller is responsible for ensuring that @dir has a repo, and for pruning
+ * the repo after calling this function to actually free the disk space.
+ */
+gboolean
+flatpak_dir_delete_mirror_refs (FlatpakDir    *self,
+                                gboolean       dry_run,
+                                GCancellable  *cancellable,
+                                GError       **error)
+{
+  g_autoptr(GHashTable) collection_refs = NULL;  /* (element-type OstreeCollectionRef utf8) */
+  g_autoptr(GPtrArray) ignore_collections = g_ptr_array_new_with_free_func (g_free); /* (element-type utf8) */
+  g_auto(GStrv) remotes = NULL;
+  const char *repo_collection_id;
+  OstreeRepo *repo;
+  int i;
+
+  /* Generally a flatpak repo should not have its own collection ID set, but
+   * check just in case flatpak is being run on a server for some reason. When
+   * a repo has a collection ID set, its own refs from refs/heads/ will be
+   * listed by the ostree_repo_list_collection_refs() call below, and we need
+   * to be sure not to delete them. There would be no reason to install from a
+   * server to itself, so we don't expect refs matching repo_collection_id to
+   * be in refs/mirrors/.
+   */
+  repo = flatpak_dir_get_repo (self);
+  repo_collection_id = ostree_repo_get_collection_id (repo);
+  if (repo_collection_id != NULL)
+    g_ptr_array_add (ignore_collections, g_strdup (repo_collection_id));
+
+  /* Check also for any disabled remotes and ignore any associated
+   * collection-refs; in the case of Endless this would be the remote used for
+   * OS updates which Flatpak shouldn't touch.
+   */
+  remotes = ostree_repo_remote_list (repo, NULL);
+  for (i = 0; remotes[i] != NULL; i++)
+    {
+      g_autofree char *remote_collection_id = NULL;
+
+      if (!flatpak_dir_get_remote_disabled (self, remotes[i]))
+        continue;
+      remote_collection_id = flatpak_dir_get_remote_collection_id (self, remotes[i]);
+      if (remote_collection_id != NULL)
+        g_ptr_array_add (ignore_collections, g_steal_pointer (&remote_collection_id));
+    }
+  g_ptr_array_add (ignore_collections, NULL);
+
+  if (!ostree_repo_list_collection_refs (repo, NULL, &collection_refs,
+                                         OSTREE_REPO_LIST_REFS_EXT_EXCLUDE_REMOTES,
+                                         cancellable, error))
+    return FALSE;
+
+  /* Now delete any collection-refs which are in refs/mirrors/, were created by
+   * Flatpak, and don't belong to a disabled remote.
+   */
+  GLNX_HASH_TABLE_FOREACH (collection_refs, const OstreeCollectionRef *, c_r)
+    {
+      if (g_strv_contains ((const char * const *)ignore_collections->pdata, c_r->collection_id))
+        {
+          g_debug ("Ignoring collection-ref (%s, %s) since its remote is disabled or it matches the repo collection ID",
+                   c_r->collection_id, c_r->ref_name);
+          continue;
+        }
+
+      /* Only delete refs which Flatpak created; the repo may have other
+       * users. We could check only for refs that come from configured
+       * remotes, but that would not cover the case of if a remote was
+       * deleted.
+       */
+      if (g_str_has_prefix (c_r->ref_name, "app/") ||
+          g_str_has_prefix (c_r->ref_name, "runtime/") ||
+          g_str_has_prefix (c_r->ref_name, "appstream/") ||
+          g_str_has_prefix (c_r->ref_name, "appstream2/") ||
+          g_strcmp0 (c_r->ref_name, OSTREE_REPO_METADATA_REF) == 0)
+        {
+          if (dry_run)
+            g_print (_("Skipping deletion of mirror ref (%s, %s)…\n"), c_r->collection_id, c_r->ref_name);
+          else
+            {
+              if (!ostree_repo_set_collection_ref_immediate (repo, c_r, NULL, cancellable, error))
+                return FALSE;
+            }
+        }
+    }
+
+  return TRUE;
 }
