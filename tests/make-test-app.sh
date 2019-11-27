@@ -113,6 +113,13 @@ BusName=org.test.Hello.SearchProvider
 ObjectPath=/org/test/Hello/SearchProvider
 Version=2
 EOF
+cat > ${DIR}/files/share/gnome-shell/search-providers/org.test.Hello.Ekn.search-provider.ini <<EOF
+[Shell Search Provider]
+DesktopId=org.test.Hello.desktop
+BusName=com.endlessm.EknServices3.SearchProviderV3
+ObjectPath=/org/test/Hello/SearchProvider
+Version=2
+EOF
 
 mkdir -p ${DIR}/files/share/krunner/dbusplugins
 cat > ${DIR}/files/share/krunner/dbusplugins/org.test.Hello.desktop <<EOF
