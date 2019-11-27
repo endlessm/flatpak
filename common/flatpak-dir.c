@@ -6853,7 +6853,12 @@ export_ini_file (int                 parent_fd,
     return FALSE;
 
   if (ini_type == INI_FILE_TYPE_SEARCH_PROVIDER)
-    g_key_file_set_boolean (keyfile, "Shell Search Provider", "DefaultDisabled", TRUE);
+    {
+      g_autofree gchar *bus_name = g_key_file_get_string (keyfile, "Shell Search Provider", "BusName", NULL);
+
+      if (bus_name == NULL || !g_str_has_prefix (bus_name, "com.endlessm."))
+        g_key_file_set_boolean (keyfile, "Shell Search Provider", "DefaultDisabled", TRUE);
+    }
 
   new_data = g_key_file_to_data (keyfile, &new_data_len, error);
   if (new_data == NULL)
