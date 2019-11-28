@@ -1002,6 +1002,11 @@ _ostree_collection_ref_free0 (OstreeCollectionRef *ref)
  * it can have local updates available that has not been deployed. Look
  * at commit vs latest_commit on installed apps for this.
  *
+ * This also checks if any of #FlatpakInstalledRef has a missing #FlatpakRelatedRef
+ * (which has `should-download` set to %TRUE) or runtime. If so, it adds the
+ * ref to the returning #GPtrArray to pull in the #FlatpakRelatedRef or runtime
+ * again via an update operation in #FlatpakTransaction.
+ *
  * Returns: (transfer container) (element-type FlatpakInstalledRef): a GPtrArray of
  *   #FlatpakInstalledRef instances, or %NULL on error
  */
@@ -1079,6 +1084,7 @@ flatpak_installation_list_installed_refs_for_update (FlatpakInstallation *self,
 
   for (i = 0; i < installed->len; i++)
     {
+      g_autoptr(FlatpakRemoteState) state = NULL;
       FlatpakInstalledRef *installed_ref = g_ptr_array_index (installed, i);
       const char *remote_name = flatpak_installed_ref_get_origin (installed_ref);
       g_autofree char *full_ref = flatpak_ref_format_ref (FLATPAK_REF (installed_ref));
@@ -1092,7 +1098,59 @@ flatpak_installation_list_installed_refs_for_update (FlatpakInstallation *self,
       /* Note: local_commit may be NULL here */
       if (remote_commit != NULL &&
           g_strcmp0 (remote_commit, local_commit) != 0)
-        g_ptr_array_add (updates, g_object_ref (installed_ref));
+        {
+          g_ptr_array_add (updates, g_object_ref (installed_ref));
+
+          /* Don't check further, as we already added the installed_ref to @updates. */
+          continue;
+        }
+
+      /* Check if all "should-download" related refs for the ref are installed.
+       * If not, add the ref in @updates array so that it can be installed via
+       * FlatpakTransaction's update-op.
+       *
+       * This makes sure that the ref (maybe an app or runtime) remains in usable
+       * state and fixes itself through an update.
+       */
+      state = flatpak_dir_get_remote_state_optional (dir, remote_name, FALSE, cancellable, error);
+      if (state == NULL)
+        continue;
+
+      if (flatpak_dir_check_installed_ref_missing_related_ref (dir, state, full_ref, cancellable))
+        {
+          g_ptr_array_add (updates, g_object_ref (installed_ref));
+
+          /* Don't check for runtime, if we already added the installed_ref to @updates. */
+          continue;
+        }
+
+      if (flatpak_ref_get_kind (FLATPAK_REF (installed_ref)) == FLATPAK_REF_KIND_APP)
+        {
+          g_autoptr(GVariant) deploy_data = NULL;
+
+          /* This checks if an already installed app has a missing runtime.
+           * If so, return that installed ref in the updates list, so that FlatpakTransaction
+           * can resolve one of its operation to install the runtime instead.
+           *
+           * Runtime of an app can go missing if an app upgrade makes an app dependent on a new runtime
+           * entirely. We had couple of cases like that in the past, for example, before it was updated
+           * to use FlatpakTransaction, updating an app in GNOME Software to a version which needs a
+           * different runtime would not install that new runtime, leaving the app unusable.
+           */
+          deploy_data = flatpak_dir_get_deploy_data (dir, full_ref, FLATPAK_DEPLOY_VERSION_CURRENT, cancellable, NULL);
+          if (deploy_data != NULL)
+            {
+              g_autoptr(GFile) deploy_dir = NULL;
+              const gchar *runtime = NULL;
+              g_autofree gchar *full_runtime_ref = NULL;
+
+              runtime = flatpak_deploy_data_get_runtime (deploy_data);
+              full_runtime_ref = g_strconcat ("runtime/", runtime, NULL);
+              deploy_dir = flatpak_dir_get_if_deployed (dir, full_runtime_ref, NULL, cancellable);
+              if (deploy_dir == NULL)
+                g_ptr_array_add (updates, g_object_ref (installed_ref));
+            }
+        }
     }
 
   collection_refs = g_ptr_array_new_with_free_func ((GDestroyNotify) _ostree_collection_ref_free0);
