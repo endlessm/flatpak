@@ -1071,7 +1071,7 @@ msgstr "Remove configuração da CHAVE"
 #: app/flatpak-builtins-config.c:149
 #, c-format
 msgid "'%s' does not look like a language/locale code"
-msgstr ""
+msgstr "'%s' não se parece com um código de idioma/localidade"
 
 #: app/flatpak-builtins-config.c:172
 #, c-format
@@ -1835,7 +1835,7 @@ msgstr "Produz saída mínima e não faz perguntas"
 
 #: app/flatpak-builtins-install.c:75
 msgid "Update install if already installed"
-msgstr ""
+msgstr "Desinstala primeiro, se já instalado"
 
 #: app/flatpak-builtins-install.c:134
 msgid "Bundle filename must be specified"
@@ -3259,7 +3259,7 @@ msgstr "Desinstala um aplicativo ou runtime instalado"
 
 #: app/flatpak-main.c:80
 msgid "Mask out updates and automatic installation"
-msgstr ""
+msgstr "Ocultar atualizações e instalação automática"
 
 #: app/flatpak-main.c:81
 msgid "List installed apps and/or runtimes"

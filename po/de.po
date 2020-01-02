@@ -5,6 +5,7 @@
 # 
 # Translators:
 # Will Thompson <wjt@endlessm.com>, 2019
+# Thomas Siegele <tsiegele@gmx.at>, 2019
 # 
 #, fuzzy
 msgid ""
@@ -13,7 +14,7 @@ msgstr ""
 "Report-Msgid-Bugs-To: https://github.com/flatpak/flatpak/issues\n"
 "POT-Creation-Date: 2019-10-31 13:49+0000\n"
 "PO-Revision-Date: 2019-01-08 12:00+0000\n"
-"Last-Translator: Will Thompson <wjt@endlessm.com>, 2019\n"
+"Last-Translator: Thomas Siegele <tsiegele@gmx.at>, 2019\n"
 "Language-Team: German (https://www.transifex.com/endless-os/teams/9016/de/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -196,7 +197,7 @@ msgstr "Plattform-Laufzeit eher verwenden als Sdk"
 
 #: app/flatpak-builtins-build.c:50
 msgid "Make destination readonly"
-msgstr ""
+msgstr "Ziel mit nur Lesezugriff machen"
 
 #: app/flatpak-builtins-build.c:51
 msgid "Add bind mount"
@@ -336,7 +337,7 @@ msgstr ""
 #: app/flatpak-builtins-build-commit-from.c:65
 #: app/flatpak-builtins-build-export.c:68
 msgid "REASON"
-msgstr ""
+msgstr "GRUND"
 
 #: app/flatpak-builtins-build-commit-from.c:66
 msgid ""
@@ -477,7 +478,7 @@ msgstr ""
 #: app/flatpak-builtins-build-export.c:492
 #, c-format
 msgid "WARNING: Can't find Exec key in %s: %s\n"
-msgstr ""
+msgstr "ACHTUNG: Exec key in %s nicht gefunden: %s\n"
 
 #: app/flatpak-builtins-build-export.c:500
 #: app/flatpak-builtins-build-export.c:597
@@ -647,7 +648,7 @@ msgstr "GRUPPE=SCHLÜSSEL[=WERT]]"
 
 #: app/flatpak-builtins-build-finish.c:61
 msgid "Don't inherit permissions from runtime"
-msgstr ""
+msgstr "Berechtigungen von Laufzeit nicht vererben"
 
 #: app/flatpak-builtins-build-finish.c:154
 #, c-format
@@ -917,7 +918,7 @@ msgstr ""
 #: app/flatpak-builtins-remote-add.c:69
 #: app/flatpak-builtins-remote-modify.c:75
 msgid "COMMENT"
-msgstr ""
+msgstr "KOMMENTAR"
 
 #: app/flatpak-builtins-build-update-repo.c:63
 msgid "A full-paragraph description for this repository"
@@ -927,7 +928,7 @@ msgstr ""
 #: app/flatpak-builtins-remote-add.c:70
 #: app/flatpak-builtins-remote-modify.c:76
 msgid "DESCRIPTION"
-msgstr ""
+msgstr "BESCHREIBUNG"
 
 #: app/flatpak-builtins-build-update-repo.c:64
 msgid "URL for a website for this repository"
@@ -1065,12 +1066,12 @@ msgstr "Konfiguration für SCHLÜSSEL zurücksetzen"
 #: app/flatpak-builtins-config.c:149
 #, c-format
 msgid "'%s' does not look like a language/locale code"
-msgstr ""
+msgstr "'%s' sieht nicht aus wie ein Sprach- /Regionscode"
 
 #: app/flatpak-builtins-config.c:172
 #, c-format
 msgid "'%s' does not look like a language code"
-msgstr ""
+msgstr "'%s' sieht nicht aus wie ein Sprachcode"
 
 #: app/flatpak-builtins-config.c:226
 #, c-format
@@ -1087,15 +1088,15 @@ msgstr ""
 
 #: app/flatpak-builtins-config.c:280
 msgid "Too many arguments for --get"
-msgstr ""
+msgstr "Zu viele Argumente für --get"
 
 #: app/flatpak-builtins-config.c:302
 msgid "You must specify KEY and VALUE"
-msgstr ""
+msgstr "Sie müssen SCHLÜSSEL und WERT angeben"
 
 #: app/flatpak-builtins-config.c:304
 msgid "Too many arguments for --set"
-msgstr ""
+msgstr "Zu viele Argumente für --set"
 
 #: app/flatpak-builtins-config.c:328
 msgid "Too many arguments for --unset"
