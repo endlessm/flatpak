@@ -14003,7 +14003,7 @@ flatpak_dir_find_remote_related_for_metadata (FlatpakDir         *self,
                                    state->remote_name,
                                    &url,
                                    error))
-    return FALSE;
+    return NULL;
 
   if (*url == 0)
     return g_steal_pointer (&related);  /* Empty url, silently disables updates */
@@ -14164,7 +14164,7 @@ flatpak_dir_find_remote_related (FlatpakDir         *self,
                                    state->remote_name,
                                    &url,
                                    error))
-    return FALSE;
+    return NULL;
 
   if (*url == 0)
     return g_steal_pointer (&related);  /* Empty url, silently disables updates */
