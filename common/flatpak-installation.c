@@ -1019,6 +1019,7 @@ flatpak_installation_list_installed_refs_for_update (FlatpakInstallation *self,
   g_autoptr(GPtrArray) installed = NULL; /* (element-type FlatpakInstalledRef) */
   g_autoptr(GPtrArray) remotes = NULL; /* (element-type FlatpakRemote) */
   g_autoptr(GHashTable) remote_commits = NULL; /* (element-type utf8 utf8) */
+  g_autoptr(GHashTable) remote_states = NULL; /* (element-type utf8 FlatpakRemoteState) */
   int i, j;
   g_autoptr(FlatpakDir) dir = NULL;
   g_auto(OstreeRepoFinderResultv) results = NULL;
@@ -1082,15 +1083,18 @@ flatpak_installation_list_installed_refs_for_update (FlatpakInstallation *self,
   if (dir == NULL)
     return NULL;
 
+  remote_states = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify) flatpak_remote_state_unref);
+
   for (i = 0; i < installed->len; i++)
     {
-      g_autoptr(FlatpakRemoteState) state = NULL;
+      FlatpakRemoteState *state;
       FlatpakInstalledRef *installed_ref = g_ptr_array_index (installed, i);
       const char *remote_name = flatpak_installed_ref_get_origin (installed_ref);
       g_autofree char *full_ref = flatpak_ref_format_ref (FLATPAK_REF (installed_ref));
       g_autofree char *key = g_strdup_printf ("%s:%s", remote_name, full_ref);
       const char *remote_commit = g_hash_table_lookup (remote_commits, key);
       const char *local_commit = flatpak_installed_ref_get_latest_commit (installed_ref);
+      g_autoptr(GError) local_error = NULL;
 
       if (flatpak_dir_ref_is_masked (dir, full_ref))
         continue;
@@ -1112,9 +1116,20 @@ flatpak_installation_list_installed_refs_for_update (FlatpakInstallation *self,
        * This makes sure that the ref (maybe an app or runtime) remains in usable
        * state and fixes itself through an update.
        */
-      state = flatpak_dir_get_remote_state_optional (dir, remote_name, FALSE, cancellable, error);
+      state = g_hash_table_lookup (remote_states, remote_name);
       if (state == NULL)
-        continue;
+        {
+
+          state = flatpak_dir_get_remote_state_optional (dir, remote_name, FALSE, cancellable, &local_error);
+          if (state == NULL)
+            {
+              g_debug ("Update: Failed to get remote state for %s: %s",
+                       remote_name, local_error->message);
+              continue;
+            }
+
+          g_hash_table_insert (remote_states, g_strdup (remote_name), state);
+        }
 
       if (flatpak_dir_check_installed_ref_missing_related_ref (dir, state, full_ref, cancellable))
         {
