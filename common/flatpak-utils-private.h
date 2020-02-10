@@ -834,7 +834,10 @@ typedef void (*FlatpakProgressCallback)(const char *status,
 OstreeAsyncProgress *flatpak_progress_new (FlatpakProgressCallback progress,
                                            gpointer                progress_data);
 
-#if OSTREE_CHECK_VERSION (2019, 6)
+/* FIXME: Lowered from 2019.6 to 2019.3 for Endless backport. Revert this
+ * when we've rebased on newer ostree.
+ */
+#if OSTREE_CHECK_VERSION (2019, 3)
 #define FLATPAK_DO_CHAIN_PROGRESS 1
 #endif
 
