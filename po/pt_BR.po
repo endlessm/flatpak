@@ -1089,7 +1089,7 @@ msgstr "Remove configuração da CHAVE"
 #: app/flatpak-builtins-config.c:149
 #, c-format
 msgid "'%s' does not look like a language/locale code"
-msgstr "“%s” não parece ser um código de idioma/localidade"
+msgstr "'%s' não se parece com um código de idioma/localidade"
 
 #: app/flatpak-builtins-config.c:172
 #, c-format
@@ -4611,8 +4611,7 @@ msgstr "Não foi possível abrir o ld.so.cache gerado"
 #: common/flatpak-run.c:3404
 #, c-format
 msgid "Running %s is not allowed by the policy set by your administrator"
-msgstr ""
-"A execução de %s não é permitida pela política definida pelo administrador"
+msgstr "A execução de %s não é permitido pelo administrador"
 
 #: common/flatpak-run.c:3445
 msgid "\"flatpak run\" is not intended to be ran with sudo"
@@ -5207,15 +5206,15 @@ msgstr "Autenticação é necessária para atualizar metadados"
 #. all users’ parental controls policies to true.
 #: system-helper/org.freedesktop.Flatpak.policy.in:287
 msgid "Override parental controls"
-msgstr "Sobrepor controle parental"
+msgstr "Substituir controles dos pais"
 
 #: system-helper/org.freedesktop.Flatpak.policy.in:288
 msgid ""
 "Authentication is required to install software which is restricted by your "
 "parental controls policy"
 msgstr ""
-"Autenticação é necessária para instalar software que está restrito por sua "
-"política de controle parental"
+"É necessária autenticação para instalar aplicativos restrito pela política "
+"de controle dos pais"
 
 #~ msgid "Use OCI labels instead of annotations"
 #~ msgstr "Usa rótulos OCI em vez de anotações"

@@ -1111,7 +1111,7 @@ msgstr "Konfiguration für SCHLÜSSEL zurücksetzen"
 #: app/flatpak-builtins-config.c:149
 #, c-format
 msgid "'%s' does not look like a language/locale code"
-msgstr ""
+msgstr "'%s' sieht nicht aus wie ein Sprach- /Regionscode"
 
 #: app/flatpak-builtins-config.c:172
 #, c-format
@@ -2359,13 +2359,15 @@ msgid "Disable GPG verification"
 msgstr "GPG-Überprüfung deaktivieren"
 
 # Bedeutung aus flatpak-remote-add.xml
-# Mark the remote as not enumerated. This means the remote will not be used to list applications, for instance in graphical installation tools.
+# Mark the remote as not enumerated. This means the remote will not be used to
+# list applications, for instance in graphical installation tools.
 #: app/flatpak-builtins-remote-add.c:68 app/flatpak-builtins-remote-modify.c:74
 msgid "Mark the remote as don't enumerate"
 msgstr "Entfernte Quelle markieren als »nicht berücksichtigen«"
 
 # Bedeutung aus flatpak-remote-add.xml
-# Mark the remote as not enumerated. This means the remote will not be used to list applications, for instance in graphical installation tools.
+# Mark the remote as not enumerated. This means the remote will not be used to
+# list applications, for instance in graphical installation tools.
 #: app/flatpak-builtins-remote-add.c:69 app/flatpak-builtins-remote-modify.c:75
 msgid "Mark the remote as don't use for deps"
 msgstr "Ferne Quelle markieren als »Nicht für Abhängigkeiten verwenden«"
@@ -2684,7 +2686,8 @@ msgid "Mark the remote as enumerate"
 msgstr "Entfernte Quelle markieren als »berücksichtigen«"
 
 # Bedeutung aus flatpak-remote-add.xml
-# Mark the remote as not enumerated. This means the remote will not be used to list applications, for instance in graphical installation tools.
+# Mark the remote as not enumerated. This means the remote will not be used to
+# list applications, for instance in graphical installation tools.
 #: app/flatpak-builtins-remote-modify.c:65
 msgid "Mark the remote as used for dependencies"
 msgstr "Ferne Quelle markieren als »Verwendet für Abhängigkeiten«"
@@ -5589,7 +5592,6 @@ msgstr "Legitimierung wird benötigt, um Software zu installieren"
 #~ msgstr "Keine Referenz-Informationen im Softwarebestand verfügbar"
 
 #, fuzzy
-#~| msgid "Found in several remotes:\n"
 #~ msgid "Found in remote %s\n"
 #~ msgstr "In verschiedenen fernen Quellen gefunden:\n"
 
