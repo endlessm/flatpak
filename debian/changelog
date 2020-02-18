@@ -1,3 +1,13 @@
+flatpak (1.6.2-1endless1) master; urgency=medium
+
+  * Rebase against Debian bullseye (T29218)
+  * Resync Endless packaging changes:
+    - Add malcontent build dependency
+    - Use /var/endless-extra/flatpak as external directory for system
+      installation
+
+ -- Dan Nicholson <nicholson@endlessm.com>  Tue, 18 Feb 2020 16:01:04 -0700
+
 flatpak (1.6.2-1) unstable; urgency=medium
 
   * New upstream stable release
