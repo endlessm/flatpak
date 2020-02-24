@@ -46,6 +46,7 @@ static char **opt_gpg_key_ids;
 static char *opt_gpg_homedir;
 static char *opt_endoflife;
 static char *opt_timestamp;
+static int opt_token_type = -1;
 
 static GOptionEntry options[] = {
   { "src-repo", 's', 0, G_OPTION_ARG_STRING, &opt_src_repo, N_("Source repo dir"), N_("SRC-REPO") },
@@ -59,6 +60,7 @@ static GOptionEntry options[] = {
   { "gpg-sign", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_gpg_key_ids, N_("GPG Key ID to sign the commit with"), N_("KEY-ID") },
   { "gpg-homedir", 0, 0, G_OPTION_ARG_STRING, &opt_gpg_homedir, N_("GPG Homedir to use when looking for keyrings"), N_("HOMEDIR") },
   { "end-of-life", 0, 0, G_OPTION_ARG_STRING, &opt_endoflife, N_("Mark build as end-of-life"), N_("REASON") },
+  { "token-type", 0, 0, G_OPTION_ARG_INT, &opt_token_type, N_("Set type of token needed to install this commit"), N_("VAL") },
   { "timestamp", 0, 0, G_OPTION_ARG_STRING, &opt_timestamp, N_("Override the timestamp of the commit (NOW for current time)"), N_("TIMESTAMP") },
   { "disable-fsync", 0, 0, G_OPTION_ARG_NONE, &opt_disable_fsync, "Do not invoke fsync()", NULL },
   { NULL }
@@ -482,12 +484,19 @@ flatpak_builtin_build_commit_from (int argc, char **argv, GCancellable *cancella
               strcmp (key, OSTREE_COMMIT_META_KEY_ENDOFLIFE) == 0)
             continue;
 
+          if (opt_token_type >= 0 && strcmp (key, "xa.token-type") == 0)
+            continue;
+
           g_variant_builder_add_value (&metadata_builder, child);
         }
 
       if (opt_endoflife && *opt_endoflife)
         g_variant_builder_add (&metadata_builder, "{sv}", OSTREE_COMMIT_META_KEY_ENDOFLIFE,
                                g_variant_new_string (opt_endoflife));
+
+      if (opt_token_type >= 0)
+        g_variant_builder_add (&metadata_builder, "{sv}", "xa.token-type",
+                               g_variant_new_int32 (opt_token_type));
 
       timestamp = ostree_commit_get_timestamp (src_commitv);
       if (opt_timestamp)
