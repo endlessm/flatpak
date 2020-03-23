@@ -1,3 +1,9 @@
+flatpak (1.6.2-1endless2) master; urgency=medium
+
+  * Add dependency on eos-metrics-0-dev for downstream metrics (T28742)
+
+ -- Philip Withnall <withnall@endlessm.com>  Mon, 23 Mar 2020 16:51:00 +0000
+
 flatpak (1.6.2-1endless1) master; urgency=medium
 
   * Rebase against Debian bullseye (T29218)
