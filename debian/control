@@ -17,6 +17,7 @@ Build-Depends:
  dh-exec (>= 0.23~),
  docbook-xml <!nodoc>,
  docbook-xsl <!nodoc>,
+ eos-metrics-0-dev (>= 0.5.0),
  fuse <!nocheck>,
  gnupg <!nocheck>,
  gobject-introspection (>= 1.54.1-2~),
