@@ -38,6 +38,12 @@ option(
   value : '',
 )
 option(
+  'eosmetrics',
+  type : 'boolean',
+  description : 'enable EOS metrics, or not',
+  value : 'true',
+)
+option(
   'gdm_env_file',
   type : 'boolean',
   description : 'install gdm env.d file (not needed if systemd generators work',

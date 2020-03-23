@@ -184,6 +184,7 @@ endif
 libxml_dep = dependency('libxml-2.0', version : '>=2.4')
 libzstd_dep = dependency('libzstd', version : '>=0.8.1', required : get_option('libzstd'))
 dconf_dep = dependency('dconf', version : '>=0.26', required : get_option('dconf'))
+eosmetrics_dep = dependency('eosmetrics-0', version : '>=0.5.0', required : get_option('eosmetrics'))
 libsystemd_dep = dependency('libsystemd', required : get_option('systemd'))
 malcontent_dep = dependency('malcontent-0', version : '>=0.5.0', required : get_option('malcontent'))
 polkit_agent_dep = dependency('polkit-agent-1', version : '>=0.98', required : get_option('system_helper'))
@@ -382,6 +383,10 @@ endif
 
 if dconf_dep.found()
   cdata.set('HAVE_DCONF', 1)
+endif
+
+if eosmetrics_dep.found()
+  cdata.set('HAVE_EOSMETRICS', 1)
 endif
 
 if libcurl_dep.found()

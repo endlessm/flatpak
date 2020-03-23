@@ -119,6 +119,7 @@ built_headers = [
 libflatpak_common_deps = [
   base_deps,
   dconf_dep,
+  eosmetrics_dep,
   gpgme_dep,
   json_glib_dep,
   libarchive_dep,
