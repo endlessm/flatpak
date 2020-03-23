@@ -189,6 +189,7 @@ libflatpak_common_la_CFLAGS = \
 	$(ZSTD_CFLAGS) \
 	$(BASE_CFLAGS) \
 	$(DCONF_CFLAGS) \
+	$(EOSMETRICS_CFLAGS) \
 	$(HIDDEN_VISIBILITY_CFLAGS) \
 	$(INTERNAL_GPGME_CFLAGS) \
 	$(JSON_CFLAGS) \
@@ -207,6 +208,7 @@ libflatpak_common_la_LIBADD = \
 	$(ZSTD_LIBS) \
 	$(BASE_LIBS) \
 	$(DCONF_LIBS) \
+	$(EOSMETRICS_LIBS) \
 	$(INTERNAL_GPGME_LIBS) \
 	$(JSON_LIBS) \
 	$(LIBSECCOMP_LIBS) \
