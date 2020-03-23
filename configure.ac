@@ -253,6 +253,12 @@ PKG_CHECK_MODULES(GLIB260, glib-2.0 >= 2.60,
                   [AC_DEFINE(GLIB_VERSION_MIN_REQUIRED, GLIB_VERSION_2_60, [Ignore massive GTimeVal deprecation warnings in 2.62])],
                   [true])
 
+PKG_CHECK_MODULES([EOSMETRICS], [eosmetrics-0 >= 0.5.0],
+                  [have_eosmetrics=yes], [have_eosmetrics=no])
+AS_IF([test "$have_eosmetrics" = yes], [
+  AC_DEFINE([HAVE_EOSMETRICS], [1], [Define if eosmetrics-0 is available])
+])
+
 save_LIBS=$LIBS
 LIBS=$ARCHIVE_LIBS
 AC_CHECK_FUNCS(archive_read_support_filter_all)
@@ -643,4 +649,5 @@ echo "          Use libmalcontent:      $have_libmalcontent"
 echo "          Use libzstd:            $have_zstd"
 echo "          Use auto sideloading:   $enable_auto_sideloading"
 echo "          HTTP backend:           $http_backend"
+echo "          Use eosmetrics:         $have_eosmetrics"
 echo ""

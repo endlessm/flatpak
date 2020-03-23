@@ -43,6 +43,10 @@
 #include <gio/gunixsocketaddress.h>
 #include <ostree.h>
 
+#ifdef HAVE_EOSMETRICS
+#include <eosmetrics/eosmetrics.h>
+#endif
+
 #ifdef USE_SYSTEM_HELPER
 #include <polkit/polkit.h>
 #endif
@@ -8494,10 +8498,25 @@ flatpak_dir_check_parental_controls (FlatpakDir    *self,
   authorized = polkit_authorization_result_get_is_authorized (result);
 
   if (!authorized)
-    return flatpak_fail_error (error, FLATPAK_ERROR_PERMISSION_DENIED,
-                               /* Translators: The placeholder is for an app ref. */
-                               _("Installing %s is not allowed by the policy set by your administrator"),
-                               ref);
+    {
+#ifdef HAVE_EOSMETRICS
+      /* Send a metrics event so we have an idea if there are any places which
+       * don’t block app installing from the UI. If everything is implemented
+       * correctly, this event should never be submitted (apart from when the
+       * user initiates an install using the `flatpak` CLI).
+       *
+       * See: https://phabricator.endlessm.com/T28741 */
+#define FLATPAK_PARENTAL_CONTROLS_INSTALL_EVENT "9d03daad-f1ed-41a8-bc5a-6b532c075832"
+      emtr_event_recorder_record_event (emtr_event_recorder_get_default (),
+                                        FLATPAK_PARENTAL_CONTROLS_INSTALL_EVENT,
+                                        g_variant_new_string (ref));
+#endif  /* HAVE_EOSMETRICS */
+
+      return flatpak_fail_error (error, FLATPAK_ERROR_PERMISSION_DENIED,
+                                /* Translators: The placeholder is for an app ref. */
+                                _("Installing %s is not allowed by the policy set by your administrator"),
+                                ref);
+    }
 
   g_debug ("Parental controls policy overridden by polkit for %s", ref);
 #endif  /* USE_SYSTEM_HELPER */
