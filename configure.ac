@@ -232,6 +232,8 @@ PKG_CHECK_MODULES(GLIB260, glib-2.0 >= 2.60,
                   [AC_DEFINE(GLIB_VERSION_MIN_REQUIRED, GLIB_VERSION_2_60, [Ignore massive GTimeVal deprecation warnings in 2.62])],
                   [true])
 
+PKG_CHECK_MODULES([EOSMETRICS], [eosmetrics-0 >= 0.5.0])
+
 save_LIBS=$LIBS
 LIBS=$ARCHIVE_LIBS
 AC_CHECK_FUNCS(archive_read_support_filter_all)

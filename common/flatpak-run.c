@@ -22,6 +22,7 @@
 
 #include <string.h>
 #include <ctype.h>
+#include <eosmetrics/eosmetrics.h>
 #include <fcntl.h>
 #include <gio/gdesktopappinfo.h>
 #include <stdio.h>
@@ -3399,10 +3400,23 @@ check_parental_controls (const char     *app_ref,
                                                             G_APP_INFO (app_info));
 
   if (!allowed)
-    return flatpak_fail_error (error, FLATPAK_ERROR_PERMISSION_DENIED,
-                               /* Translators: The placeholder is for an app ref. */
-                               _("Running %s is not allowed by the policy set by your administrator"),
-                               app_ref);
+    {
+      /* Send a metrics event so we have an idea if there are any places which
+       * don’t block app launching from the UI. If everything is implemented
+       * correctly, this event should never be submitted (apart from when the
+       * user runs an app using the `flatpak` CLI).
+       *
+       * See: https://phabricator.endlessm.com/T28741 */
+#define FLATPAK_PARENTAL_CONTROLS_RUN_EVENT "afca2515-e9ce-43aa-b355-7663c770b4b6"
+      emtr_event_recorder_record_event (emtr_event_recorder_get_default (),
+                                        FLATPAK_PARENTAL_CONTROLS_RUN_EVENT,
+                                        g_variant_new_string (app_ref));
+
+      return flatpak_fail_error (error, FLATPAK_ERROR_PERMISSION_DENIED,
+                                 /* Translators: The placeholder is for an app ref. */
+                                 _("Running %s is not allowed by the policy set by your administrator"),
+                                 app_ref);
+    }
 #endif  /* HAVE_LIBMALCONTENT */
 
   return TRUE;
