@@ -4887,8 +4887,7 @@ extra_data_progress_report (guint64  downloaded_bytes,
 {
   FlatpakProgress *progress = FLATPAK_PROGRESS (user_data);
 
-  if (progress)
-    flatpak_progress_update_extra_data (progress, downloaded_bytes);
+  flatpak_progress_update_extra_data (progress, downloaded_bytes);
 }
 
 static gboolean
@@ -4977,8 +4976,7 @@ flatpak_dir_setup_extra_data (FlatpakDir                           *self,
         }
     }
 
-  if (progress)
-    flatpak_progress_init_extra_data (progress, n_extra_data, total_download_size);
+  flatpak_progress_init_extra_data (progress, n_extra_data, total_download_size);
 
   return TRUE;
 }
@@ -5018,8 +5016,7 @@ flatpak_dir_pull_extra_data (FlatpakDir          *self,
   extra_data_builder = g_variant_builder_new (G_VARIANT_TYPE ("a(ayay)"));
 
   /* Other fields were already set in flatpak_dir_setup_extra_data() */
-  if (progress)
-    flatpak_progress_start_extra_data (progress);
+  flatpak_progress_start_extra_data (progress);
 
   base_dir = flatpak_get_user_base_dir_location ();
 
@@ -5177,8 +5174,7 @@ oci_pull_progress_cb (guint64 total_size, guint64 pulled_size,
 {
   FlatpakProgress *progress = data;
 
-  if (progress)
-    flatpak_progress_update_oci_pull (progress, total_size, pulled_size, n_layers, pulled_layers);
+  flatpak_progress_update_oci_pull (progress, total_size, pulled_size, n_layers, pulled_layers);
 }
 
 static gboolean
@@ -5231,8 +5227,7 @@ flatpak_dir_mirror_oci (FlatpakDir          *self,
 
   flatpak_oci_registry_set_token (registry, token);
 
-  if (progress)
-    flatpak_progress_start_oci_pull (progress);
+  flatpak_progress_start_oci_pull (progress);
 
   g_debug ("Mirroring OCI image %s", oci_digest);
 
@@ -5319,8 +5314,7 @@ flatpak_dir_pull_oci (FlatpakDir          *self,
   if (repo == NULL)
     repo = self->repo;
 
-  if (progress)
-    flatpak_progress_start_oci_pull (progress);
+  flatpak_progress_start_oci_pull (progress);
 
   g_debug ("Pulling OCI image %s", oci_digest);
 
