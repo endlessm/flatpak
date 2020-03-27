@@ -4842,11 +4842,14 @@ repo_pull (OstreeRepo                           *self,
 
       options = g_variant_ref_sink (g_variant_builder_end (&builder));
 
-      g_autoptr(FlatpakMainContext) main_context = flatpak_progress_push_main_context (progress);
+      {
+        g_auto(FlatpakMainContext) context = FLATKPAK_MAIN_CONTEXT_INIT;
+        flatpak_progress_init_main_context (progress, &context);
 
-      if (!ostree_repo_pull_with_options (self, remote_name, options,
-                                          main_context->ostree_progress, cancellable, error))
-        return translate_ostree_repo_pull_errors (error);
+        if (!ostree_repo_pull_with_options (self, remote_name, options,
+                                            context.ostree_progress, cancellable, error))
+          return translate_ostree_repo_pull_errors (error);
+      }
     }
 
   if (old_commit &&
@@ -5590,6 +5593,7 @@ repo_pull_local_untrusted (FlatpakDir          *self,
   const char *commits[2] = { NULL, NULL };
   g_autofree char *collection_id = NULL;
   g_autoptr(GError) dummy_error = NULL;
+  g_auto(FlatpakMainContext) context = FLATKPAK_MAIN_CONTEXT_INIT;
 
   /* The ostree fetcher asserts if error is NULL */
   if (error == NULL)
@@ -5639,9 +5643,10 @@ repo_pull_local_untrusted (FlatpakDir          *self,
     }
 
   options = g_variant_ref_sink (g_variant_builder_end (&builder));
-  g_autoptr(FlatpakMainContext) main_context = flatpak_progress_push_main_context (progress);
+
+  flatpak_progress_init_main_context (progress, &context);
   res = ostree_repo_pull_with_options (repo, url, options,
-                                       main_context->ostree_progress, cancellable, error);
+                                       context.ostree_progress, cancellable, error);
   if (!res)
     translate_ostree_repo_pull_errors (error);
 
