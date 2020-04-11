@@ -118,8 +118,10 @@ Flatpak-1.0.*
 po/.intltool-merge-cache
 po/Makefile.in.in
 po/POTFILES
+po/Flatpak.pot
 po/Makevars.template
 po/Rules-quot
+po/flatpak.pot
 po/*.gmo
 po/*.sed
 po/*.header
