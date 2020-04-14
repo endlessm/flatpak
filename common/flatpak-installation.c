@@ -1098,16 +1098,22 @@ flatpak_installation_list_installed_refs_for_update (FlatpakInstallation *self,
 
   g_signal_connect (transaction, "ready", G_CALLBACK (transaction_ready), &related_to_ops);
 
+  installed_refs_for_update = g_ptr_array_new_with_free_func (g_object_unref);
+
   flatpak_transaction_run (transaction, cancellable, &local_error);
   g_assert (local_error != NULL);
-  if (!g_error_matches (local_error, FLATPAK_ERROR, FLATPAK_ERROR_ABORTED))
+  if (g_error_matches (local_error, FLATPAK_ERROR, FLATPAK_ERROR_REF_NOT_FOUND))
+    {
+      /* We're probably offline, return an empty array */
+      return g_steal_pointer (&installed_refs_for_update);
+    }
+  else if (!g_error_matches (local_error, FLATPAK_ERROR, FLATPAK_ERROR_ABORTED))
     {
       g_propagate_error (error, g_steal_pointer (&local_error));
       return NULL;
     }
   g_clear_error (&local_error);
 
-  installed_refs_for_update = g_ptr_array_new_with_free_func (g_object_unref);
   installed_refs_for_update_set = g_hash_table_new (g_str_hash, g_str_equal);
 
   /* For each ref that would be affected by the transaction, if it is
