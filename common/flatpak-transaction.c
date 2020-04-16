@@ -125,6 +125,7 @@ struct _FlatpakTransactionOperation
   int                             run_after_prio; /* Higher => run later (when it becomes runnable). Used to run related ops (runtime extensions) before deps (apps using the runtime) */
   GList                          *run_before_ops;
   FlatpakTransactionOperation    *fail_if_op_fails; /* main app/runtime for related extensions, runtime for apps */
+  FlatpakTransactionOperation    *related_to_op; /* main app/runtime for related extensions, app for runtimes */
 };
 
 typedef struct _FlatpakTransactionPrivate FlatpakTransactionPrivate;
@@ -646,6 +647,26 @@ const char *
 flatpak_transaction_operation_get_ref (FlatpakTransactionOperation *self)
 {
   return self->ref;
+}
+
+/**
+ * flatpak_transaction_operation_get_related_to_op:
+ * @self: a #FlatpakTransactionOperation
+ *
+ * Gets the operation which caused this operation to be added to the
+ * transaction. In the case of a runtime, it's the app whose runtime it is. In
+ * the case of a related ref such as an extension, it's the main app or
+ * runtime. In the case of a main app or something added to the transaction by
+ * flatpak_transaction_add_ref(), %NULL will be returned.
+ *
+ * Returns: (transfer none) (nullable): the #FlatpakTransactionOperation this
+ *   one is related to, or %NULL
+ * Since: 1.7.3
+ */
+FlatpakTransactionOperation *
+flatpak_transaction_operation_get_related_to_op (FlatpakTransactionOperation *self)
+{
+  return self->related_to_op;
 }
 
 /**
@@ -1745,6 +1766,7 @@ add_related (FlatpakTransaction          *self,
                                                    FLATPAK_TRANSACTION_OPERATION_UNINSTALL);
           related_op->non_fatal = TRUE;
           related_op->fail_if_op_fails = op;
+          related_op->related_to_op = op;
           run_operation_before (op, related_op, 1);
         }
     }
@@ -1764,6 +1786,7 @@ add_related (FlatpakTransaction          *self,
                                                    FLATPAK_TRANSACTION_OPERATION_INSTALL_OR_UPDATE);
           related_op->non_fatal = TRUE;
           related_op->fail_if_op_fails = op;
+          related_op->related_to_op = op;
           run_operation_before (related_op, op, 1);
         }
     }
@@ -1901,6 +1924,7 @@ add_deps (FlatpakTransaction          *self,
                                    runtime_op->ref, op->ref);
 
       op->fail_if_op_fails = runtime_op;
+      runtime_op->related_to_op = op;
       run_operation_before (runtime_op, op, 2);
     }
 
@@ -1922,6 +1946,7 @@ flatpak_transaction_add_ref (FlatpakTransaction             *self,
   FlatpakTransactionPrivate *priv = flatpak_transaction_get_instance_private (self);
   g_autofree char *origin = NULL;
   g_auto(GStrv) parts = NULL;
+  g_auto(GStrv) merged_subpaths = NULL;
   const char *pref;
   g_autofree char *origin_remote = NULL;
   g_autoptr(FlatpakRemoteState) state = NULL;
@@ -1961,7 +1986,9 @@ flatpak_transaction_add_ref (FlatpakTransaction             *self,
   /* install or update */
   if (kind == FLATPAK_TRANSACTION_OPERATION_UPDATE)
     {
-      if (!dir_ref_is_installed (priv->dir, ref, &origin, NULL))
+      g_autoptr(GVariant) deploy_data = NULL;
+
+      if (!dir_ref_is_installed (priv->dir, ref, &origin, &deploy_data))
         return flatpak_fail_error (error, FLATPAK_ERROR_NOT_INSTALLED,
                                    _("%s not installed"), pref);
 
@@ -1971,6 +1998,18 @@ flatpak_transaction_add_ref (FlatpakTransaction             *self,
           return TRUE;
         }
       remote = origin;
+
+      /* As stated in the documentation for flatpak_transaction_add_update(),
+       * for locale extensions we merge existing subpaths with the set of
+       * configured languages, to match the behavior of add_related().
+       */
+      if (subpaths == NULL && g_str_has_suffix (parts[1], ".Locale"))
+        {
+          g_autofree const char **old_subpaths = flatpak_deploy_data_get_subpaths (deploy_data);
+          g_auto(GStrv) extra_subpaths = flatpak_dir_get_locale_subpaths (priv->dir);
+          merged_subpaths = flatpak_subpaths_merge ((char **)old_subpaths, extra_subpaths);
+          subpaths = (const char **)merged_subpaths;
+        }
     }
   else if (kind == FLATPAK_TRANSACTION_OPERATION_INSTALL)
     {
@@ -2155,7 +2194,8 @@ flatpak_transaction_add_install_flatpakref (FlatpakTransaction *self,
  * @self: a #FlatpakTransaction
  * @ref: the ref
  * @subpaths: (nullable) (array zero-terminated=1): subpaths to install; %NULL
- *  to use the current set, or `{ "", NULL }` to pull all subpaths.
+ *  to use the current set plus the set of configured languages, or
+ *  `{ "", NULL }` to pull all subpaths.
  * @commit: (nullable): the commit to update to, or %NULL to use the latest
  * @error: return location for a #GError
  *
@@ -2178,6 +2218,7 @@ flatpak_transaction_add_update (FlatpakTransaction *self,
   if (subpaths != NULL && subpaths[0] != NULL && subpaths[0][0] == 0)
     subpaths = all_paths;
 
+  /* Note: we implement the merge when subpaths == NULL in flatpak_transaction_add_ref() */
   return flatpak_transaction_add_ref (self, NULL, ref, subpaths, NULL, commit, FLATPAK_TRANSACTION_OPERATION_UPDATE, NULL, NULL, error);
 }
 
@@ -3237,7 +3278,7 @@ sort_ops (FlatpakTransaction *self)
   priv->ops = NULL;
 
   /* First mark runnable all jobs that depend on nothing.
-     Note that this seesntially reverses the original list, so these
+     Note that this essentially reverses the original list, so these
      are in the same order as specified */
   for (l = remaining; l != NULL; l = next)
     {
