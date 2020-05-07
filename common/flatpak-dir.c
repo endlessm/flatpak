@@ -6582,7 +6582,9 @@ export_ini_file (int                 parent_fd,
     {
       g_autofree gchar *bus_name = g_key_file_get_string (keyfile, "Shell Search Provider", "BusName", NULL);
 
-      if (bus_name == NULL || !g_str_has_prefix (bus_name, "com.endlessm."))
+      if (bus_name == NULL ||
+          (!g_str_has_prefix (bus_name, "com.endlessm.") &&
+           !g_str_equal (bus_name, "org.learningequality.Kolibri.SearchProvider")))
         g_key_file_set_boolean (keyfile, "Shell Search Provider", "DefaultDisabled", TRUE);
     }
 
