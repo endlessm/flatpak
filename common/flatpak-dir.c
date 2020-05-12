@@ -42,7 +42,9 @@
 #include <gio/gunixsocketaddress.h>
 #include <ostree.h>
 
+#ifdef HAVE_EOSMETRICS
 #include <eosmetrics/eosmetrics.h>
+#endif
 
 #ifdef USE_SYSTEM_HELPER
 #include <polkit/polkit.h>
@@ -7823,6 +7825,7 @@ flatpak_dir_check_parental_controls (FlatpakDir    *self,
 
   if (!authorized)
     {
+#ifdef HAVE_EOSMETRICS
       /* Send a metrics event so we have an idea if there are any places which
        * don’t block app installing from the UI. If everything is implemented
        * correctly, this event should never be submitted (apart from when the
@@ -7833,6 +7836,7 @@ flatpak_dir_check_parental_controls (FlatpakDir    *self,
       emtr_event_recorder_record_event (emtr_event_recorder_get_default (),
                                         FLATPAK_PARENTAL_CONTROLS_INSTALL_EVENT,
                                         g_variant_new_string (ref));
+#endif  /* HAVE_EOSMETRICS */
 
       return flatpak_fail_error (error, FLATPAK_ERROR_PERMISSION_DENIED,
                                 /* Translators: The placeholder is for an app ref. */
