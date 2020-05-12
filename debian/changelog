@@ -1,3 +1,11 @@
+flatpak (1.6.2-1endless2buster1) buster; urgency=medium
+
+  * Rebuild for infrastructure (T30099)
+    - Remove malcontent build dependency
+    - Remove eosmetrics build dependency
+
+ -- Dan Nicholson <nicholson@endlessm.com>  Tue, 12 May 2020 15:29:27 -0600
+
 flatpak (1.6.2-1endless2) master; urgency=medium
 
   * Add dependency on eos-metrics-0-dev for downstream metrics (T28742)
