@@ -22,7 +22,6 @@
 
 #include <string.h>
 #include <ctype.h>
-#include <eosmetrics/eosmetrics.h>
 #include <fcntl.h>
 #include <gio/gdesktopappinfo.h>
 #include <stdio.h>
@@ -37,6 +36,9 @@
 #include <gio/gunixfdlist.h>
 #ifdef HAVE_DCONF
 #include <dconf/dconf.h>
+#endif
+#ifdef HAVE_EOSMETRICS
+#include <eosmetrics/eosmetrics.h>
 #endif
 #ifdef HAVE_LIBMALCONTENT
 #include <libmalcontent/malcontent.h>
@@ -3401,6 +3403,7 @@ check_parental_controls (const char     *app_ref,
 
   if (!allowed)
     {
+#ifdef HAVE_EOSMETRICS
       /* Send a metrics event so we have an idea if there are any places which
        * don’t block app launching from the UI. If everything is implemented
        * correctly, this event should never be submitted (apart from when the
@@ -3411,6 +3414,7 @@ check_parental_controls (const char     *app_ref,
       emtr_event_recorder_record_event (emtr_event_recorder_get_default (),
                                         FLATPAK_PARENTAL_CONTROLS_RUN_EVENT,
                                         g_variant_new_string (app_ref));
+#endif  /* HAVE_EOSMETRICS */
 
       return flatpak_fail_error (error, FLATPAK_ERROR_PERMISSION_DENIED,
                                  /* Translators: The placeholder is for an app ref. */
