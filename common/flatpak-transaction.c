@@ -4018,7 +4018,7 @@ flatpak_transaction_real_run (FlatpakTransaction *self,
     {
       FlatpakTransactionOperation *op = l->data;
 
-      if (!add_deps (self, op, error))
+      if (!op->skip && !add_deps (self, op, error))
         return FALSE;
     }
 
@@ -4031,7 +4031,7 @@ flatpak_transaction_real_run (FlatpakTransaction *self,
     {
       FlatpakTransactionOperation *op = l->data;
 
-      if (!add_related (self, op, error))
+      if (!op->skip && !add_related (self, op, error))
         return FALSE;
     }
 
