@@ -34,12 +34,12 @@ endif
 override_dh_auto_configure:
 	rm -f app/parse-datetime.c
 	dh_auto_configure -- \
-		-Dauto_sideloading=false \
+		-Dauto_sideloading=true \
 		-Ddbus_config_dir=/usr/share/dbus-1/system.d \
 		-Dgdm_env_file=true \
 		-Dhttp_backend=curl \
 		-Dprivileged_group=sudo \
-		-Drun_media_dir=/media \
+		-Drun_media_dir=/run/media \
 		-Dselinux_module=disabled \
 		-Dsystem_bubblewrap=bwrap \
 		-Dsystem_dbus_proxy=xdg-dbus-proxy \
