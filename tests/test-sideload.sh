@@ -47,6 +47,8 @@ assert_has_file usb_dir/repo/refs/mirrors/org.test.Collection.test/app/org.test.
 assert_has_file usb_dir/repo/refs/mirrors/org.test.Collection.test/runtime/org.test.Hello.Locale/${ARCH}/master
 assert_has_file usb_dir/repo/refs/mirrors/org.test.Collection.test/runtime/org.test.Platform/${ARCH}/master
 assert_has_file usb_dir/repo/refs/mirrors/org.test.Collection.test/appstream2/${ARCH}
+# Endless-specific: make sure ostree-metadata is there for backwards compat
+assert_has_file usb_dir/repo/refs/mirrors/org.test.Collection.test/ostree-metadata
 
 ${FLATPAK} ${U} uninstall -y --all
 
