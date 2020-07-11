@@ -160,6 +160,11 @@ static gboolean flatpak_dir_cleanup_remote_for_url_change (FlatpakDir   *self,
                                                            const char   *url,
                                                            GCancellable *cancellable,
                                                            GError      **error);
+static gboolean _flatpak_dir_fetch_remote_state_metadata_branch (FlatpakDir         *self,
+                                                                 FlatpakRemoteState *state,
+                                                                 gboolean            only_cached,
+                                                                 GCancellable       *cancellable,
+                                                                 GError            **error);
 
 static gboolean flatpak_dir_lookup_remote_filter (FlatpakDir *self,
                                                   const char *name,
@@ -12349,6 +12354,19 @@ _flatpak_dir_get_remote_state (FlatpakDir   *self,
         return NULL;
     }
 
+    {
+      g_autoptr(GError) local_error = NULL;
+      /* Try to download ostree-metadata but don't fail on error. We do this so
+       * that if an app is copied to external media using "flatpak create-usb", the
+       * media will work as an install source for computers running Flatpak
+       * versions older than 1.7.1 (which were before
+       * https://github.com/flatpak/flatpak/pull/3476)
+       */
+      if (state->collection_id != NULL &&
+          !_flatpak_dir_fetch_remote_state_metadata_branch (self, state, only_cached, cancellable, &local_error))
+        g_debug ("Failed to download ostree-metadata from %s: %s", state->remote_name, local_error->message);
+    }
+
   if (state->collection_id != NULL &&
       state->summary != NULL &&
       !_validate_summary_for_collection_id (state->summary, state->collection_id, error))
@@ -14615,6 +14633,144 @@ flatpak_dir_list_remote_refs (FlatpakDir         *self,
                                    remove_unless_decomposed_in_hash,
                                    decomposed_local_refs);
     }
+
+  return TRUE;
+}
+
+gboolean
+_flatpak_dir_fetch_remote_state_metadata_branch (FlatpakDir         *self,
+                                                 FlatpakRemoteState *state, /* This state does not have metadata filled out yet */
+                                                 gboolean            only_cached,
+                                                 GCancellable       *cancellable,
+                                                 GError            **error)
+{
+  FlatpakPullFlags flatpak_flags;
+  gboolean gpg_verify;
+  g_autofree char *checksum_from_summary = NULL;
+  g_autofree char *checksum_from_repo = NULL;
+
+  g_assert (state->collection_id != NULL);
+
+  /* We can only fetch metadata if we’re going to verify it with GPG. */
+  if (!ostree_repo_remote_get_gpg_verify (self->repo, state->remote_name,
+                                          &gpg_verify, error))
+    return FALSE;
+
+  if (!gpg_verify)
+    return flatpak_fail_error (error, FLATPAK_ERROR_UNTRUSTED, _("Can't pull from untrusted non-gpg verified remote"));
+
+  /* Look up the checksum as advertised by the summary file. If it differs from
+   * what we currently have on disk, try and pull the updated ostree-metadata ref.
+   * This is how we implement caching. Ignore failure and pull the ref anyway. */
+  if (state->summary != NULL)
+    flatpak_summary_lookup_ref (state->summary, state->collection_id,
+                                OSTREE_REPO_METADATA_REF,
+                                &checksum_from_summary, NULL);
+
+  if (!flatpak_repo_resolve_rev (self->repo, state->collection_id, state->remote_name,
+                                 OSTREE_REPO_METADATA_REF, TRUE, &checksum_from_repo,
+                                 cancellable, error))
+    return FALSE;
+
+  g_debug ("%s: Comparing %s from summary and %s from repo",
+           G_STRFUNC, checksum_from_summary, checksum_from_repo);
+
+  if (checksum_from_summary != NULL && checksum_from_repo != NULL &&
+      g_str_equal (checksum_from_summary, checksum_from_repo))
+    return TRUE;
+
+  /* Do the pull into the local repository. */
+  flatpak_flags = FLATPAK_PULL_FLAGS_DOWNLOAD_EXTRA_DATA;
+  flatpak_flags |= FLATPAK_PULL_FLAGS_NO_STATIC_DELTAS;
+
+  if (flatpak_dir_use_system_helper (self, NULL))
+    {
+      g_autoptr(OstreeRepo) child_repo = NULL;
+      g_auto(GLnxLockFile) child_repo_lock = { 0, };
+      const char *installation = flatpak_dir_get_id (self);
+      const char *subpaths[] = {NULL};
+      const char * const *previous_ids = {NULL};
+      g_autofree char *child_repo_path = NULL;
+      FlatpakHelperDeployFlags helper_flags = 0;
+      g_autofree char *url = NULL;
+      gboolean gpg_verify_summary;
+      gboolean is_oci;
+
+      if (!ostree_repo_remote_get_url (self->repo,
+                                       state->remote_name,
+                                       &url,
+                                       error))
+        return FALSE;
+
+      if (!ostree_repo_remote_get_gpg_verify_summary (self->repo, state->remote_name,
+                                                      &gpg_verify_summary, error))
+        return FALSE;
+
+      if (!ostree_repo_remote_get_gpg_verify (self->repo, state->remote_name,
+                                              &gpg_verify, error))
+        return FALSE;
+
+      is_oci = flatpak_dir_get_remote_oci (self, state->remote_name);
+      if ((!gpg_verify_summary && state->collection_id == NULL) || !gpg_verify)
+        {
+          /* The remote is not gpg verified, so we don't want to allow installation via
+             a download in the home directory, as there is no way to verify you're not
+             injecting anything into the remote. However, in the case of a remote
+             configured to a local filesystem we can just let the system helper do
+             the installation, as it can then avoid network i/o and be certain the
+             data comes from the right place.
+
+             If a collection ID is available, we can verify the refs in commit
+             metadata. */
+          if (g_str_has_prefix (url, "file:"))
+            helper_flags |= FLATPAK_HELPER_DEPLOY_FLAGS_LOCAL_PULL;
+          else
+            return flatpak_fail_error (error, FLATPAK_ERROR_UNTRUSTED, _("Can't pull from untrusted non-gpg verified remote"));
+        }
+      else if (is_oci)
+        {
+          return flatpak_fail_error (error, FLATPAK_ERROR_INVALID_DATA, _("No metadata branch for OCI"));
+        }
+      else
+        {
+          /* We're pulling from a remote source, we do the network mirroring pull as a
+             user and hand back the resulting data to the system-helper, that trusts us
+             due to the GPG signatures in the repo */
+          child_repo = flatpak_dir_create_system_child_repo (self, &child_repo_lock, NULL, error);
+          if (child_repo == NULL)
+            return FALSE;
+
+          if (!flatpak_dir_pull (self, state, OSTREE_REPO_METADATA_REF, NULL, NULL, NULL, NULL, NULL,
+                                 child_repo,
+                                 flatpak_flags,
+                                 0,
+                                 /* progress = */ NULL, cancellable, error))
+            return FALSE;
+
+          child_repo_path = g_file_get_path (ostree_repo_get_path (child_repo));
+        }
+
+      helper_flags |= FLATPAK_HELPER_DEPLOY_FLAGS_NO_DEPLOY;
+
+      if (!flatpak_dir_system_helper_call_deploy (self,
+                                                  child_repo_path ? child_repo_path : "",
+                                                  helper_flags, OSTREE_REPO_METADATA_REF, state->remote_name,
+                                                  (const char * const *) subpaths, previous_ids,
+                                                  installation ? installation : "",
+                                                  cancellable,
+                                                  error))
+        return FALSE;
+
+      if (child_repo_path)
+        (void) glnx_shutil_rm_rf_at (AT_FDCWD, child_repo_path, NULL, NULL);
+
+      return TRUE;
+    }
+
+  if (!flatpak_dir_pull (self, state, OSTREE_REPO_METADATA_REF, NULL, NULL, NULL, NULL, NULL, NULL,
+                         flatpak_flags, OSTREE_REPO_PULL_FLAGS_NONE,
+                         /* progress = */ NULL, cancellable, error))
+    return FALSE;
 
   return TRUE;
 }
