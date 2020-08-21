@@ -1,3 +1,9 @@
+flatpak (1.8.2-1endless1) master; urgency=medium
+
+  * New upstream stable release
+
+ -- Matthew Leeds <matthew.leeds@endlessm.com>  Fri, 21 Aug 2020 10:56:00 -0700
+
 flatpak (1.8.1-1endless1) master; urgency=medium
 
   * Rebase against Debian bullseye (T29642)
