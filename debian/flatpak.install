@@ -4,7 +4,6 @@ debian/org.freedesktop.Flatpak.pkla     var/lib/polkit-1/localauthority/10-vendo
 etc/X11/Xsession.d
 etc/profile.d/
 lib/systemd/system/flatpak-system-helper.service
-lib/systemd/system/flatpak-sideload-repos-dir.service
 usr/bin/flatpak
 usr/lib/systemd/user-environment-generators
 usr/lib/systemd/user/flatpak-oci-authenticator.service
@@ -13,6 +12,7 @@ usr/lib/systemd/user/flatpak-session-helper.service
 usr/lib/systemd/user/flatpak-sideload-usb-repo.path
 usr/lib/systemd/user/flatpak-sideload-usb-repo.service
 usr/lib/sysusers.d
+usr/lib/tmpfiles.d/flatpak-sideload-repos.conf
 usr/libexec/flatpak-oci-authenticator
 usr/libexec/flatpak-portal
 usr/libexec/flatpak-session-helper
