@@ -14200,7 +14200,6 @@ local_match_prefix (FlatpakDir *self,
 GPtrArray *
 flatpak_dir_find_local_related_for_metadata (FlatpakDir   *self,
                                              const char   *ref,
-                                             const char   *commit,
                                              const char   *remote_name,
                                              GKeyFile     *metakey,
                                              GCancellable *cancellable,
@@ -14351,7 +14350,6 @@ flatpak_dir_find_local_related (FlatpakDir   *self,
   g_autofree char *metadata_contents = NULL;
   g_autoptr(GKeyFile) metakey = g_key_file_new ();
   g_autoptr(GPtrArray) related = NULL;
-  g_autofree char *checksum = NULL;
 
   if (!flatpak_dir_ensure_repo (self, cancellable, error))
     return NULL;
@@ -14370,8 +14368,6 @@ flatpak_dir_find_local_related (FlatpakDir   *self,
       if (deploy_data == NULL)
         return NULL;
 
-      checksum = g_strdup (flatpak_deploy_data_get_commit (deploy_data));
-
       metadata = g_file_get_child (deploy_dir, "metadata");
       if (!g_file_load_contents (metadata, cancellable, &metadata_contents, NULL, NULL, NULL))
         {
@@ -14381,6 +14377,7 @@ flatpak_dir_find_local_related (FlatpakDir   *self,
     }
   else
     {
+      g_autofree char *checksum = NULL;
       g_autoptr(GVariant) commit_data = flatpak_dir_read_latest_commit (self, remote_name, ref, &checksum, NULL, NULL);
       if (commit_data)
         {
@@ -14393,7 +14390,7 @@ flatpak_dir_find_local_related (FlatpakDir   *self,
 
   if (metadata_contents &&
       g_key_file_load_from_data (metakey, metadata_contents, -1, 0, NULL))
-    related = flatpak_dir_find_local_related_for_metadata (self, ref, checksum, remote_name, metakey, cancellable, error);
+    related = flatpak_dir_find_local_related_for_metadata (self, ref, remote_name, metakey, cancellable, error);
   else
     related = g_ptr_array_new_with_free_func ((GDestroyNotify) flatpak_related_free);
 
