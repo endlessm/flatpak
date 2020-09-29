@@ -998,14 +998,14 @@ flatpak_remote_state_load_ref_commit (FlatpakRemoteState *self,
 
   /* First try local availability */
   if (ostree_repo_load_commit (dir->repo, commit, &commit_data, NULL, NULL))
-    return g_steal_pointer (&commit_data);
+    goto out;
 
   for (int i = 0; i < self->sideload_repos->len; i++)
     {
       FlatpakSideloadState *ss = g_ptr_array_index (self->sideload_repos, i);
 
       if (ostree_repo_load_commit (ss->repo, commit, &commit_data, NULL, NULL))
-        return g_steal_pointer (&commit_data);
+        goto out;
     }
 
   if (flatpak_dir_get_remote_oci (dir, self->remote_name))
@@ -1015,6 +1015,7 @@ flatpak_remote_state_load_ref_commit (FlatpakRemoteState *self,
     commit_data = flatpak_remote_state_fetch_commit_object (self, dir, ref, commit, token,
                                                             cancellable, error);
 
+out:
   if (out_commit)
     *out_commit = g_steal_pointer (&commit);
 
@@ -7447,6 +7448,8 @@ apply_extra_data (FlatpakDir   *self,
                           NULL);
 
   if (!flatpak_run_setup_base_argv (bwrap, runtime_files, NULL, runtime_ref_parts[2],
+                                    /* Might need multiarch in apply_extra (see e.g. #3742). Should be pretty safe in this limited context */
+                                    FLATPAK_RUN_FLAG_MULTIARCH |
                                     FLATPAK_RUN_FLAG_NO_SESSION_HELPER | FLATPAK_RUN_FLAG_NO_PROC,
                                     error))
     return FALSE;

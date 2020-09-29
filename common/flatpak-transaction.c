@@ -2018,7 +2018,7 @@ add_deps (FlatpakTransaction          *self,
     {
       /* If the runtime this app uses is already to be uninstalled, then this uninstall must happen before
          the runtime is uninstalled */
-      if (runtime_op && op->kind == FLATPAK_TRANSACTION_OPERATION_UNINSTALL)
+      if (runtime_op && runtime_op->kind == FLATPAK_TRANSACTION_OPERATION_UNINSTALL)
         run_operation_before (op, runtime_op, 1);
 
       return TRUE;
@@ -2743,6 +2743,18 @@ resolve_ops (FlatpakTransaction *self,
 
       if (op->resolved)
         continue;
+
+      if (op->skip)
+        {
+          /* We're not yet resolved, but marked skip anyway, this can happen if during
+           * request_required_tokens() we were normalized away even though not fully resolved.
+           * For example we got the checksum but need to auth to get the commit, but the
+           * checksum we got was the version already installed.
+           */
+          g_assert (op->resolved_commit != NULL);
+          mark_op_resolved (op, op->resolved_commit, NULL, NULL, NULL);
+          continue;
+        }
 
       if (op->kind == FLATPAK_TRANSACTION_OPERATION_UNINSTALL)
         {
