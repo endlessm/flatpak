@@ -46,5 +46,5 @@ if command -v flatpak > /dev/null; then
     )
 
     export PATH
-    PATH="${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games}:${new_dirs:+${new_dirs}}"
+    PATH="${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games}${new_dirs:+:${new_dirs}}"
 fi
