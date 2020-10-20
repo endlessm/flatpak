@@ -1,3 +1,11 @@
+flatpak (1.8.2-1endless1buster1) buster; urgency=medium
+
+  * Rebuild for infrastructure (T30984)
+    - Remove malcontent build dependency
+    - Remove eosmetrics build dependency
+
+ -- Dan Nicholson <dbn@endlessos.org>  Tue, 20 Oct 2020 13:18:45 -0600
+
 flatpak (1.8.2-1endless1) master; urgency=medium
 
   * New upstream stable release
