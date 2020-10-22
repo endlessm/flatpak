@@ -990,13 +990,13 @@ transaction_ready (FlatpakTransaction  *transaction,
       GPtrArray *op_related_to_ops = flatpak_transaction_operation_get_related_to_ops (op);  /* (element-type FlatpakTransactionOperation) */
       FlatpakTransactionOperationType type = flatpak_transaction_operation_get_operation_type (op);
 
-      /* There is currently no way for a set of updates to lead to an
-       * uninstall, but check anyway.
+      /* There may be an uninstall op if a runtime will now be considered
+       * unused after the updates
        */
       if (type == FLATPAK_TRANSACTION_OPERATION_UNINSTALL)
         {
           const char *ref = flatpak_transaction_operation_get_ref (op);
-          g_warning ("Update transaction unexpectedly wants to uninstall %s", ref);
+          g_debug ("Update transaction wants to uninstall %s", ref);
           continue;
         }
 
@@ -1017,8 +1017,8 @@ installed_ref_compare (gconstpointer _iref_a,
 {
   const FlatpakInstalledRef *iref_a = *(const FlatpakInstalledRef **)_iref_a;
   const FlatpakInstalledRef *iref_b = *(const FlatpakInstalledRef **)_iref_b;
-  g_autofree char *ref_a = flatpak_ref_format_ref (FLATPAK_REF (iref_a));
-  g_autofree char *ref_b = flatpak_ref_format_ref (FLATPAK_REF (iref_b));
+  const char *ref_a = flatpak_ref_format_ref_cached (FLATPAK_REF (iref_a));
+  const char *ref_b = flatpak_ref_format_ref_cached (FLATPAK_REF (iref_b));
 
   return strcmp (ref_a, ref_b);
 }
@@ -1074,7 +1074,7 @@ flatpak_installation_list_installed_refs_for_update (FlatpakInstallation *self,
   for (guint i = 0; i < installed_refs->len; i++)
     {
       FlatpakInstalledRef *installed_ref = g_ptr_array_index (installed_refs, i);
-      g_autofree char *ref = flatpak_ref_format_ref (FLATPAK_REF (installed_ref));
+      const char *ref = flatpak_ref_format_ref_cached (FLATPAK_REF (installed_ref));
 
       /* This hash table will be used later for efficient search */
       g_hash_table_insert (installed_refs_hash, g_strdup (ref), installed_ref);
@@ -2266,7 +2266,7 @@ flatpak_installation_fetch_remote_size_sync (FlatpakInstallation *self,
 {
   g_autoptr(FlatpakDir) dir = NULL;
   g_autoptr(FlatpakRemoteState) state = NULL;
-  g_autofree char *full_ref = flatpak_ref_format_ref (ref);
+  const char *full_ref = flatpak_ref_format_ref_cached (ref);
 
   dir = flatpak_installation_get_dir (self, error);
   if (dir == NULL)
@@ -2306,7 +2306,7 @@ flatpak_installation_fetch_remote_metadata_sync (FlatpakInstallation *self,
 {
   g_autoptr(FlatpakDir) dir = NULL;
   g_autoptr(FlatpakRemoteState) state = NULL;
-  g_autofree char *full_ref = flatpak_ref_format_ref (ref);
+  const char *full_ref = flatpak_ref_format_ref_cached (ref);
   g_autofree char *res = NULL;
   gsize len;
 
@@ -2882,39 +2882,6 @@ flatpak_installation_run_triggers (FlatpakInstallation *self,
   return flatpak_dir_run_triggers (dir, cancellable, error);
 }
 
-
-static void
-find_used_refs (FlatpakDir *dir,
-                GHashTable *used_refs,
-                const char *ref,
-                const char *origin)
-{
-  g_autoptr(GPtrArray) related = NULL;
-  int i;
-
-  g_hash_table_add (used_refs, g_strdup (ref));
-
-  related = flatpak_dir_find_local_related (dir, ref, origin, TRUE, NULL, NULL);
-  if (related == NULL)
-    return;
-
-  for (i = 0; i < related->len; i++)
-    {
-      FlatpakRelated *rel = g_ptr_array_index (related, i);
-
-      if (!rel->auto_prune && !g_hash_table_contains (used_refs, rel->ref))
-        {
-          g_autofree char *related_origin = NULL;
-
-          g_hash_table_add (used_refs, g_strdup (rel->ref));
-
-          related_origin = flatpak_dir_get_origin (dir, rel->ref, NULL, NULL);
-          if (related_origin != NULL)
-            find_used_refs (dir, used_refs, rel->ref, related_origin);
-        }
-    }
-}
-
 /**
  * flatpak_installation_list_unused_refs:
  * @self: a #FlatpakInstallation
@@ -2924,8 +2891,10 @@ find_used_refs (FlatpakDir *dir,
  *
  * Lists the installed references that are not 'used'.
  *
- * A reference is used if it is either an application, or an sdk,
- * or the runtime of a used ref, or an extension of a used ref.
+ * A reference is used if it is either an application,
+ * or the runtime or sdk of a used ref, or an extension of a used ref.
+ * Pinned runtimes are also considered used; see flatpak-pin(1) and
+ * flatpak_installation_list_pinned_refs().
  *
  * Returns: (transfer container) (element-type FlatpakInstalledRef): a GPtrArray of
  *   #FlatpakInstalledRef instances
@@ -2938,89 +2907,111 @@ flatpak_installation_list_unused_refs (FlatpakInstallation *self,
                                        GCancellable        *cancellable,
                                        GError             **error)
 {
+  return flatpak_installation_list_unused_refs_with_options (self, arch, NULL, NULL, cancellable, error);
+}
+
+/**
+ * flatpak_installation_list_unused_refs_with_options:
+ * @self: a #FlatpakInstallation
+ * @arch: (nullable): if non-%NULL, the architecture of refs to collect
+ * @metadata_injection: (nullable): if non-%NULL, a #GHashTable mapping refs to
+ *                                  #GKeyFile objects, which when available will
+ *                                  be used instead of installed metadata
+ * @options: (nullable): if non-%NULL, a GVariant a{sv} with an extensible set
+ *                       of options
+ * @cancellable: (nullable): a #GCancellable
+ * @error: return location for a #GError
+ *
+ * Like flatpak_installation_list_unused_refs() but supports an extensible set
+ * of options as well as an @metadata_injection parameter. The following are
+ * currently defined:
+ *
+ *   * exclude-refs (as): Act as if these refs are not installed even if they
+ *       are when determining the set of unused refs
+ *   * filter-by-eol (b): Only return refs as unused if they are End-Of-Life.
+ *       Note that if this option is combined with other filters (of which there
+ *       are none currently) non-EOL refs may also be returned.
+ *
+ * Returns: (transfer container) (element-type FlatpakInstalledRef): a GPtrArray of
+ *   #FlatpakInstalledRef instances
+ *
+ * Since: 1.9.1
+ */
+GPtrArray *
+flatpak_installation_list_unused_refs_with_options (FlatpakInstallation *self,
+                                                    const char          *arch,
+                                                    GHashTable          *metadata_injection,
+                                                    GVariant            *options,
+                                                    GCancellable        *cancellable,
+                                                    GError             **error)
+{
   g_autoptr(FlatpakDir) dir = NULL;
-  g_autoptr(GHashTable) refs_hash = NULL;
   g_autoptr(GPtrArray) refs =  NULL;
-  g_auto(GStrv) app_refs = NULL;
+  g_auto(GStrv) refs_strv = NULL;
+  g_autofree char **refs_to_exclude = NULL;
+  gboolean filter_by_eol = FALSE;
+
+  if (options)
+    {
+      (void) g_variant_lookup (options, "exclude-refs", "^a&s", &refs_to_exclude);
+      (void) g_variant_lookup (options, "filter-by-eol", "b", &filter_by_eol);
+    }
+
+  dir = flatpak_installation_get_dir (self, error);
+  if (dir == NULL)
+    return NULL;
+
+  refs_strv = flatpak_dir_list_unused_refs (dir, arch, metadata_injection, NULL,
+                                            (const char * const *)refs_to_exclude, filter_by_eol,
+                                            cancellable, error);
+  if (refs_strv == NULL)
+    return NULL;
+
+  refs = g_ptr_array_new_with_free_func (g_object_unref);
+  for (char **iter = refs_strv; iter && *iter; iter++)
+    g_ptr_array_add (refs, get_ref (dir, *iter, NULL, NULL));
+
+  return g_steal_pointer (&refs);
+}
+
+/**
+ * flatpak_installation_list_pinned_refs:
+ * @self: a #FlatpakInstallation
+ * @arch: (nullable): if non-%NULL, the architecture of refs to collect
+ * @cancellable: (nullable): a #GCancellable
+ * @error: return location for a #GError
+ *
+ * Lists the installed references that are pinned, meaning they will not be
+ * returned by flatpak_installation_list_unused_refs() and won't be removed
+ * unless explicitly specified for removal.
+ *
+ * Refs appear here either because they have been pinned automatically by
+ * Flatpak or because the user pinned them; see flatpak-pin(1).
+ *
+ * Returns: (transfer container) (element-type FlatpakInstalledRef): a GPtrArray of
+ *   #FlatpakInstalledRef instances
+ *
+ * Since: 1.9.1
+ */
+GPtrArray *
+flatpak_installation_list_pinned_refs (FlatpakInstallation *self,
+                                       const char          *arch,
+                                       GCancellable        *cancellable,
+                                       GError             **error)
+{
+  g_autoptr(FlatpakDir) dir = NULL;
+  g_autoptr(GPtrArray) refs =  NULL;
   g_auto(GStrv) runtime_refs = NULL;
-  g_autoptr(GHashTable) used_refs = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  g_autoptr(GHashTable) used_runtimes = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   int i;
 
   dir = flatpak_installation_get_dir (self, error);
   if (dir == NULL)
     return NULL;
 
-  if (!flatpak_dir_list_refs (dir, "app", &app_refs, cancellable, error))
-    return NULL;
-
   if (!flatpak_dir_list_refs (dir, "runtime", &runtime_refs, cancellable, error))
     return NULL;
 
-  refs_hash = g_hash_table_new (g_str_hash, g_str_equal);
   refs = g_ptr_array_new_with_free_func (g_object_unref);
-
-  for (i = 0; app_refs[i] != NULL; i++)
-    {
-      const char *ref = app_refs[i];
-      g_autoptr(FlatpakDeploy) deploy = NULL;
-      g_autofree char *origin = NULL;
-      g_autofree char *runtime = NULL;
-      g_autofree char *sdk = NULL;
-      g_autoptr(GKeyFile) metakey = NULL;
-      g_auto(GStrv) parts = g_strsplit (ref, "/", -1);
-
-      if (arch != NULL && strcmp (parts[2], arch) != 0)
-        continue;
-
-      deploy = flatpak_dir_load_deployed (dir, ref, NULL, NULL, NULL);
-      if (deploy == NULL)
-        continue;
-
-      origin = flatpak_dir_get_origin (dir, ref, NULL, NULL);
-      if (origin == NULL)
-        continue;
-
-      find_used_refs (dir, used_refs, ref, origin);
-
-      metakey = flatpak_deploy_get_metadata (deploy);
-      runtime = g_key_file_get_string (metakey, "Application", "runtime", NULL);
-      if (runtime)
-        g_hash_table_add (used_runtimes, g_steal_pointer (&runtime));
-
-      sdk = g_key_file_get_string (metakey, "Application", "sdk", NULL);
-      if (sdk)
-        g_hash_table_add (used_runtimes, g_steal_pointer (&sdk));
-    }
-
-  GLNX_HASH_TABLE_FOREACH (used_runtimes, const char *, runtime)
-  {
-    g_autofree char *runtime_ref = g_strconcat ("runtime/", runtime, NULL);
-    g_autoptr(FlatpakDeploy) deploy = NULL;
-    g_autofree char *origin = NULL;
-    g_autofree char *sdk = NULL;
-    g_autoptr(GKeyFile) metakey = NULL;
-
-    deploy = flatpak_dir_load_deployed (dir, runtime_ref, NULL, NULL, NULL);
-    if (deploy == NULL)
-      continue;
-
-    origin = flatpak_dir_get_origin (dir, runtime_ref, NULL, NULL);
-    if (origin == NULL)
-      continue;
-
-    find_used_refs (dir, used_refs, runtime_ref, origin);
-
-    metakey = flatpak_deploy_get_metadata (deploy);
-    sdk = g_key_file_get_string (metakey, "Runtime", "sdk", NULL);
-    if (sdk)
-      {
-        g_autofree char *sdk_ref = g_strconcat ("runtime/", sdk, NULL);
-        g_autofree char *sdk_origin = flatpak_dir_get_origin (dir, sdk_ref, NULL, NULL);
-        if (sdk_origin)
-          find_used_refs (dir, used_refs, sdk_ref, sdk_origin);
-      }
-  }
 
   for (i = 0; runtime_refs[i] != NULL; i++)
     {
@@ -3030,11 +3021,8 @@ flatpak_installation_list_unused_refs (FlatpakInstallation *self,
       if (arch != NULL && strcmp (parts[2], arch) != 0)
         continue;
 
-      if (!g_hash_table_contains (used_refs, ref))
-        {
-          if (g_hash_table_add (refs_hash, (gpointer) ref))
-            g_ptr_array_add (refs, get_ref (dir, ref, NULL, NULL));
-        }
+      if (flatpak_dir_ref_is_pinned (dir, ref))
+        g_ptr_array_add (refs, get_ref (dir, ref, NULL, NULL));
     }
 
   return g_steal_pointer (&refs);

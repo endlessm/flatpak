@@ -219,24 +219,39 @@ flatpak_builtin_uninstall (int argc, char **argv, GCancellable *cancellable, GEr
           FlatpakDir *dir = g_ptr_array_index (dirs, j);
           g_autoptr(FlatpakInstallation) installation = NULL;
           UninstallDir *udir;
-          g_autoptr(GPtrArray) unused = NULL;
+          g_auto(GStrv) unused = NULL;
+          g_autoptr(GPtrArray) pinned = NULL;
 
           flatpak_dir_maybe_ensure_repo (dir, NULL, NULL);
           if (flatpak_dir_get_repo (dir) == NULL)
             continue;
 
+          installation = flatpak_installation_new_for_dir (dir, NULL, NULL);
+          pinned = flatpak_installation_list_pinned_refs (installation, opt_arch, cancellable, error);
+          if (pinned == NULL)
+            return FALSE;
+
+          if (pinned->len > 0)
+            {
+              g_print (_("\nThese runtimes in installation '%s' are pinned and won't be removed; see flatpak-pin(1):\n"),
+                       flatpak_dir_get_name_cached (dir));
+              for (i = 0; i < pinned->len; i++)
+                {
+                  FlatpakInstalledRef *rref = g_ptr_array_index (pinned, i);
+                  const char *ref = flatpak_ref_format_ref_cached (FLATPAK_REF (rref));
+                  g_print ("  %s\n", ref);
+                }
+            }
+
           udir = uninstall_dir_ensure (uninstall_dirs, dir);
 
-          installation = flatpak_installation_new_for_dir (dir, NULL, NULL);
-          unused = flatpak_installation_list_unused_refs (installation, opt_arch, cancellable, error);
+          unused = flatpak_dir_list_unused_refs (dir, opt_arch, NULL, NULL, NULL, FALSE, cancellable, error);
           if (unused == NULL)
             return FALSE;
 
-          for (i = 0; i < unused->len; i++)
+          for (char **iter = unused; iter && *iter; iter++)
             {
-              FlatpakInstalledRef *rref = g_ptr_array_index (unused, i);
-              g_autofree char *ref = flatpak_ref_format_ref (FLATPAK_REF (rref));
-
+              const char *ref = *iter;
               uninstall_dir_add_ref (udir, ref);
               found_something_to_uninstall = TRUE;
             }

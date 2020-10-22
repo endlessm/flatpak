@@ -273,7 +273,9 @@ make_runtime () {
     GPGARGS="$4"
 
     RUNTIME_REF="runtime/org.test.Platform/$(flatpak --default-arch)/${BRANCH}"
-    if [ -f ${test_builddir}/runtime-repo/${RUNTIME_REF} ]; then
+    if [ ! -z "${SRC_RUNTIME_REPO:-}" ]; then
+        RUNTIME_REPO=repos/${SRC_RUNTIME_REPO}
+    elif [ -f ${test_builddir}/runtime-repo/${RUNTIME_REF} ]; then
         RUNTIME_REPO=${test_builddir}/runtime-repo
     else
         RUNTIME_REPO=${TEST_DATA_DIR}/runtime-repo
@@ -350,6 +352,38 @@ setup_repo () {
     flatpak remote-add ${U} ${collection_args} ${import_args} ${REPONAME}-repo "http://127.0.0.1:${port}/$REPONAME"
 }
 
+setup_empty_repo () {
+    REPONAME=${1:-test}
+    COLLECTION_ID=${2:-org.test.Collection.${REPONAME}}
+
+    if [ x${USE_COLLECTIONS_IN_SERVER-} == xyes ] ; then
+        COLLECTION_ID=${2:-org.test.Collection.${REPONAME}}
+    else
+        COLLECTION_ID=
+    fi
+
+    mkdir -p repos
+    ostree --repo=repos/${REPONAME} init --mode=archive-z2
+    update_repo $REPONAME "${COLLECTION_ID}"
+    if [ $REPONAME == "test" ]; then
+        httpd
+    fi
+
+    port=$(cat httpd-port)
+    if [ x${GPGPUBKEY:-${FL_GPG_HOMEDIR}/pubring.gpg} != x ]; then
+        import_args=--gpg-import=${GPGPUBKEY:-${FL_GPG_HOMEDIR}/pubring.gpg}
+    else
+        import_args=
+    fi
+    if [ x${USE_COLLECTIONS_IN_CLIENT-} == xyes ] ; then
+        collection_args=--collection-id=${COLLECTION_ID}
+    else
+        collection_args=
+    fi
+
+    flatpak remote-add ${U} ${collection_args} ${import_args} ${REPONAME}-repo "http://127.0.0.1:${port}/$REPONAME"
+}
+
 update_repo () {
     REPONAME=${1:-test}
     COLLECTION_ID=${2:-org.test.Collection.${REPONAME}}
@@ -376,6 +410,20 @@ make_updated_app () {
     RUNTIME_BRANCH=${6:-$BRANCH}
 
     RUNTIME_BRANCH=$RUNTIME_BRANCH GPGARGS="${GPGARGS:-${FL_GPGARGS}}" $(dirname $0)/make-test-app.sh repos/${REPONAME} "${APP_ID}" "${BRANCH}" "${COLLECTION_ID}" "${TEXT}" > /dev/null
+    update_repo $REPONAME "${COLLECTION_ID}"
+}
+
+make_updated_runtime () {
+    REPONAME=${1:-test}
+    if [ x${USE_COLLECTIONS_IN_SERVER-} == xyes ] ; then
+        COLLECTION_ID=${2:-org.test.Collection.${REPONAME}}
+    else
+        COLLECTION_ID=""
+    fi
+    BRANCH=${3:-master}
+    TEXT=${4:-UPDATED}
+
+    GPGARGS="${GPGARGS:-${FL_GPGARGS}}" $(dirname $0)/make-test-runtime.sh repos/${REPONAME} org.test.Platform "${BRANCH}" "${COLLECTION_ID}" "${TEXT}" > /dev/null
     update_repo $REPONAME "${COLLECTION_ID}"
 }
 

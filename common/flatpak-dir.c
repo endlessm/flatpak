@@ -223,6 +223,7 @@ struct FlatpakDir
 
   /* Config cache, protected by config_cache lock */
   GRegex          *masked;
+  GRegex          *pinned;
 
   SoupSession     *soup_session;
 };
@@ -2280,6 +2281,7 @@ flatpak_dir_finalize (GObject *object)
   g_clear_pointer (&self->summary_cache, g_hash_table_unref);
   g_clear_pointer (&self->remote_filters, g_hash_table_unref);
   g_clear_pointer (&self->masked, g_regex_unref);
+  g_clear_pointer (&self->pinned, g_regex_unref);
 
   G_OBJECT_CLASS (flatpak_dir_parent_class)->finalize (object);
 }
@@ -3456,6 +3458,7 @@ flatpak_dir_recreate_repo (FlatpakDir   *self,
   G_LOCK (config_cache);
 
   g_clear_pointer (&self->masked, g_regex_unref);
+  g_clear_pointer (&self->pinned, g_regex_unref);
 
   G_UNLOCK (config_cache);
 
@@ -3871,6 +3874,7 @@ _flatpak_dir_reload_config (FlatpakDir   *self,
   G_LOCK (config_cache);
 
   g_clear_pointer (&self->masked, g_regex_unref);
+  g_clear_pointer (&self->pinned, g_regex_unref);
 
   G_UNLOCK (config_cache);
   return TRUE;
@@ -3898,6 +3902,32 @@ flatpak_dir_get_config (FlatpakDir *self,
   ostree_key = g_strconcat ("xa.", key, NULL);
 
   return g_key_file_get_string (config, "core", ostree_key, error);
+}
+
+GPtrArray *
+flatpak_dir_get_config_patterns (FlatpakDir *dir, const char *key)
+{
+  g_autoptr(GPtrArray) patterns = NULL;
+  g_autofree char *key_value = NULL;
+  int i;
+
+  patterns = g_ptr_array_new_with_free_func (g_free);
+
+  key_value = flatpak_dir_get_config (dir, key, NULL);
+  if (key_value)
+    {
+      g_auto(GStrv) oldv = g_strsplit (key_value, ";", -1);
+
+      for (i = 0; oldv[i] != NULL; i++)
+        {
+          const char *old = oldv[i];
+
+          if (*old != 0 && !flatpak_g_ptr_array_contains_string (patterns, old))
+            g_ptr_array_add (patterns, g_strdup (old));
+        }
+    }
+
+  return g_steal_pointer (&patterns);
 }
 
 gboolean
@@ -3947,6 +3977,64 @@ flatpak_dir_set_config (FlatpakDir *self,
     return FALSE;
 
   return TRUE;
+}
+
+gboolean
+flatpak_dir_config_append_pattern (FlatpakDir *self,
+                                   const char *key,
+                                   const char *pattern,
+                                   gboolean    runtime_only,
+                                   gboolean   *out_already_present,
+                                   GError    **error)
+{
+  g_autoptr(GPtrArray) patterns = flatpak_dir_get_config_patterns (self, key);
+  g_autofree char *regexp;
+  gboolean already_present;
+  g_autofree char *merged_patterns = NULL;
+
+  regexp = flatpak_filter_glob_to_regexp (pattern, runtime_only, error);
+  if (regexp == NULL)
+    return FALSE;
+
+  if (!(already_present = flatpak_g_ptr_array_contains_string (patterns, pattern)))
+    g_ptr_array_add (patterns, g_strdup (pattern));
+
+  if (out_already_present)
+    *out_already_present = already_present;
+
+  g_ptr_array_sort (patterns, flatpak_strcmp0_ptr);
+
+  g_ptr_array_add (patterns, NULL);
+  merged_patterns = g_strjoinv (";", (char **)patterns->pdata);
+
+  return flatpak_dir_set_config (self, key, merged_patterns, error);
+}
+
+gboolean
+flatpak_dir_config_remove_pattern (FlatpakDir *self,
+                                   const char *key,
+                                   const char *pattern,
+                                   GError    **error)
+{
+  g_autoptr(GPtrArray) patterns = flatpak_dir_get_config_patterns (self, key);
+  g_autofree char *merged_patterns = NULL;
+  int j;
+
+  for (j = 0; j < patterns->len; j++)
+    {
+      if (strcmp (g_ptr_array_index (patterns, j), pattern) == 0)
+        break;
+    }
+
+  if (j == patterns->len)
+    return flatpak_fail (error, _("No current %s pattern matching %s"), key, pattern);
+  else
+    g_ptr_array_remove_index (patterns, j);
+
+  g_ptr_array_add (patterns, NULL);
+  merged_patterns = g_strjoinv (";", (char **)patterns->pdata);
+
+  return flatpak_dir_set_config (self, key, merged_patterns, error);
 }
 
 gboolean
@@ -13798,7 +13886,7 @@ flatpak_dir_get_mask_regexp (FlatpakDir *self)
                 {
                   g_autofree char *regexp = NULL;
 
-                  regexp = flatpak_filter_glob_to_regexp (pattern, NULL);
+                  regexp = flatpak_filter_glob_to_regexp (pattern, FALSE, NULL);
                   if (regexp)
                     {
                       if (i != 0)
@@ -13828,6 +13916,66 @@ flatpak_dir_ref_is_masked (FlatpakDir *self,
   g_autoptr(GRegex) masked = flatpak_dir_get_mask_regexp (self);
 
   return !flatpak_filters_allow_ref (NULL, masked, ref);
+}
+
+static GRegex *
+flatpak_dir_get_pin_regexp (FlatpakDir *self)
+{
+  GRegex *res = NULL;
+
+  G_LOCK (config_cache);
+
+  if (self->pinned == NULL)
+    {
+      g_autofree char *pinned = NULL;
+
+      pinned = flatpak_dir_get_config (self, "pinned", NULL);
+      if (pinned)
+        {
+          g_auto(GStrv) patterns = g_strsplit (pinned, ";", -1);
+          g_autoptr(GString) deny_regexp = g_string_new ("^(");
+          int i;
+
+          for (i = 0; patterns[i] != NULL; i++)
+            {
+              const char *pattern = patterns[i];
+
+              if (*pattern != 0)
+                {
+                  g_autofree char *regexp = NULL;
+
+                  regexp = flatpak_filter_glob_to_regexp (pattern,
+                                                          TRUE, /* only match runtimes */
+                                                          NULL);
+                  if (regexp)
+                    {
+                      if (i != 0)
+                        g_string_append (deny_regexp, "|");
+                      g_string_append (deny_regexp, regexp);
+                    }
+                }
+            }
+
+          g_string_append (deny_regexp, ")$");
+          self->pinned = g_regex_new (deny_regexp->str, G_REGEX_DOLLAR_ENDONLY|G_REGEX_RAW|G_REGEX_OPTIMIZE, G_REGEX_MATCH_ANCHORED, NULL);
+        }
+    }
+
+  if (self->pinned)
+    res = g_regex_ref (self->pinned);
+
+  G_UNLOCK (config_cache);
+
+  return res;
+}
+
+gboolean
+flatpak_dir_ref_is_pinned (FlatpakDir *self,
+                           const char *ref)
+{
+  g_autoptr(GRegex) pinned = flatpak_dir_get_pin_regexp (self);
+
+  return !flatpak_filters_allow_ref (NULL, pinned, ref);
 }
 
 GPtrArray *
@@ -13991,7 +14139,9 @@ local_match_prefix (FlatpakDir *self,
   parts = g_strsplit (extension_ref, "/", -1);
   parts_prefix = g_strconcat (parts[1], ".", NULL);
 
-  list_prefix = g_strdup_printf ("%s:%s", remote, parts[0]);
+  if (remote)
+    list_prefix = g_strdup_printf ("%s:%s", remote, parts[0]);
+
   if (ostree_repo_list_refs (self->repo, list_prefix, &refs, NULL, NULL))
     {
       GHashTableIter hash_iter;
@@ -14001,10 +14151,24 @@ local_match_prefix (FlatpakDir *self,
       while (g_hash_table_iter_next (&hash_iter, &key, NULL))
         {
           const char *partial_ref_and_origin = key;
-          g_autofree char *partial_ref = NULL;
+          g_autofree char *partial_ref_store = NULL;
+          const char *partial_ref;
           g_auto(GStrv) cur_parts = NULL;
 
-          ostree_parse_refspec (partial_ref_and_origin, NULL, &partial_ref, NULL);
+          ostree_parse_refspec (partial_ref_and_origin, NULL, &partial_ref_store, NULL);
+          if (remote == NULL)
+            {
+              /* If we're not filtering via list_prefix we need to filter by part[0] manually */
+              char *slash = strchr (partial_ref_store, '/');
+              if (slash == NULL)
+                continue;
+              *slash = 0;
+              if (strcmp (partial_ref_store, parts[0]) != 0)
+                continue;
+              partial_ref = slash + 1;
+            }
+          else
+            partial_ref = partial_ref_store;
 
           cur_parts = g_strsplit (partial_ref, "/", -1);
 
@@ -14028,11 +14192,11 @@ local_match_prefix (FlatpakDir *self,
   return matches;
 }
 
+/* Finds all the locally installed ref related to ref, if remote_name is set it is limited to refs from that remote */
 GPtrArray *
 flatpak_dir_find_local_related_for_metadata (FlatpakDir   *self,
                                              const char   *ref,
-                                             const char   *commit,
-                                             const char   *remote_name,
+                                             const char   *remote_name, /* nullable */
                                              GKeyFile     *metakey,
                                              GCancellable *cancellable,
                                              GError      **error)
@@ -14101,7 +14265,8 @@ flatpak_dir_find_local_related_for_metadata (FlatpakDir   *self,
               const char *branch = branches[branch_i];
 
               extension_ref = g_build_filename ("runtime", extension, parts[2], branch, NULL);
-              if (flatpak_repo_resolve_rev (self->repo,
+              if (remote_name != NULL &&
+                  flatpak_repo_resolve_rev (self->repo,
                                             NULL,
                                             remote_name,
                                             extension_ref,
@@ -14116,7 +14281,7 @@ flatpak_dir_find_local_related_for_metadata (FlatpakDir   *self,
               else if ((deploy_data = flatpak_dir_get_deploy_data (self, extension_ref,
                                                                    FLATPAK_DEPLOY_VERSION_ANY,
                                                                    NULL, NULL)) != NULL &&
-                       g_strcmp0 (flatpak_deploy_data_get_origin (deploy_data), remote_name) == 0)
+                       (remote_name == NULL || g_strcmp0 (flatpak_deploy_data_get_origin (deploy_data), remote_name) == 0))
                 {
                   /* Here we're including extensions that are deployed but might
                    * not have a ref in the repo, as happens with remote-delete
@@ -14134,7 +14299,8 @@ flatpak_dir_find_local_related_for_metadata (FlatpakDir   *self,
                       g_autofree char *match_checksum = NULL;
                       g_autoptr(GBytes) match_deploy_data = NULL;
 
-                      if (flatpak_repo_resolve_rev (self->repo,
+                      if (remote_name != NULL &&
+                          flatpak_repo_resolve_rev (self->repo,
                                                     NULL,
                                                     remote_name,
                                                     match,
@@ -14149,7 +14315,7 @@ flatpak_dir_find_local_related_for_metadata (FlatpakDir   *self,
                       else if ((match_deploy_data = flatpak_dir_get_deploy_data (self, match,
                                                                                  FLATPAK_DEPLOY_VERSION_ANY,
                                                                                  NULL, NULL)) != NULL &&
-                               g_strcmp0 (flatpak_deploy_data_get_origin (match_deploy_data), remote_name) == 0)
+                               (remote_name == NULL || g_strcmp0 (flatpak_deploy_data_get_origin (match_deploy_data), remote_name) == 0))
                         {
                           /* Here again we're including extensions that are deployed but might
                            * not have a ref in the repo
@@ -14182,7 +14348,6 @@ flatpak_dir_find_local_related (FlatpakDir   *self,
   g_autofree char *metadata_contents = NULL;
   g_autoptr(GKeyFile) metakey = g_key_file_new ();
   g_autoptr(GPtrArray) related = NULL;
-  g_autofree char *checksum = NULL;
 
   if (!flatpak_dir_ensure_repo (self, cancellable, error))
     return NULL;
@@ -14201,8 +14366,6 @@ flatpak_dir_find_local_related (FlatpakDir   *self,
       if (deploy_data == NULL)
         return NULL;
 
-      checksum = g_strdup (flatpak_deploy_data_get_commit (deploy_data));
-
       metadata = g_file_get_child (deploy_dir, "metadata");
       if (!g_file_load_contents (metadata, cancellable, &metadata_contents, NULL, NULL, NULL))
         {
@@ -14212,6 +14375,7 @@ flatpak_dir_find_local_related (FlatpakDir   *self,
     }
   else
     {
+      g_autofree char *checksum = NULL;
       g_autoptr(GVariant) commit_data = flatpak_dir_read_latest_commit (self, remote_name, ref, &checksum, NULL, NULL);
       if (commit_data)
         {
@@ -14224,7 +14388,7 @@ flatpak_dir_find_local_related (FlatpakDir   *self,
 
   if (metadata_contents &&
       g_key_file_load_from_data (metakey, metadata_contents, -1, 0, NULL))
-    related = flatpak_dir_find_local_related_for_metadata (self, ref, checksum, remote_name, metakey, cancellable, error);
+    related = flatpak_dir_find_local_related_for_metadata (self, ref, remote_name, metakey, cancellable, error);
   else
     related = g_ptr_array_new_with_free_func ((GDestroyNotify) flatpak_related_free);
 
@@ -14697,4 +14861,358 @@ flatpak_dir_delete_mirror_refs (FlatpakDir    *self,
     }
 
   return TRUE;
+}
+
+
+static gboolean
+dir_get_metadata (FlatpakDir  *dir,
+                  const char  *ref,
+                  GKeyFile   **out_metakey)
+{
+  g_autoptr(GFile) deploy_dir = NULL;
+  g_autoptr(GKeyFile) metakey = NULL;
+  g_autoptr(GFile) metadata = NULL;
+  g_autofree char *metadata_contents = NULL;
+  gsize metadata_size;
+
+  deploy_dir = flatpak_dir_get_if_deployed (dir, ref, NULL, NULL);
+  if (deploy_dir == NULL)
+    return FALSE;
+
+  metadata = g_file_get_child (deploy_dir, "metadata");
+  if (!g_file_load_contents (metadata, NULL, &metadata_contents, &metadata_size, NULL, NULL))
+    return FALSE;
+
+  metakey = g_key_file_new ();
+  if (!g_key_file_load_from_data (metakey, metadata_contents, metadata_size, 0, NULL))
+    return FALSE;
+
+  *out_metakey = g_steal_pointer (&metakey);
+
+  return TRUE;
+}
+
+static gboolean
+maybe_get_metakey (FlatpakDir  *dir,
+                   FlatpakDir  *shadowing_dir,
+                   const char  *ref,
+                   GHashTable  *metadata_injection,
+                   GKeyFile   **out_metakey,
+                   gboolean    *out_ref_is_shadowed)
+{
+  if (shadowing_dir &&
+      dir_get_metadata (shadowing_dir, ref, out_metakey))
+    {
+      *out_ref_is_shadowed = TRUE;
+      return TRUE;
+    }
+
+  if (metadata_injection != NULL)
+    {
+      GKeyFile *injected_metakey = g_hash_table_lookup (metadata_injection, ref);
+      if (injected_metakey != NULL)
+        {
+          *out_ref_is_shadowed = FALSE;
+          *out_metakey = g_key_file_ref (injected_metakey);
+          return TRUE;
+        }
+    }
+
+  if (dir_get_metadata (dir, ref, out_metakey))
+    {
+      *out_ref_is_shadowed = FALSE;
+      return TRUE;
+    }
+
+  return FALSE;
+}
+
+static gboolean
+ref_is_arch (const char *ref,
+             const char *arch)
+{
+  char *p;
+  gsize arch_len;
+
+  if (arch == NULL)
+    return TRUE; /* NULL => match any arch */
+
+  /* Skip app/ or runtime/ */
+  p = strchr (ref, '/');
+  if (p == NULL)
+    return FALSE;
+  p++;
+
+  /* Skip app/rutime id */
+  p = strchr (p, '/');
+  if (p == NULL)
+    return FALSE;
+  p++;
+
+  arch_len = strlen (arch);
+  return strncmp (p, arch, arch_len) == 0 && p[arch_len] == '/';
+}
+
+static void
+queue_ref_for_analysis (const char *ref,
+                        const char *arch,
+                        GHashTable *analyzed_refs,
+                        GQueue     *refs_to_analyze)
+{
+  char *ref_copy;
+
+  if (!ref_is_arch (ref, arch))
+    return;
+
+  if (g_hash_table_lookup (analyzed_refs, ref) != NULL)
+    return;
+
+  ref_copy = g_strdup (ref);
+  g_hash_table_add (analyzed_refs, ref_copy);
+  g_queue_push_tail (refs_to_analyze, ref_copy); /* owned by analyzed_refs */
+}
+
+/* This traverses from all the "root" refs and into for any recursive dependencies in @self
+ * that they use. In the regular case we just consider the @self installation,
+ * but we can also handle the case where another directory "shadows" self. For example
+ * we might be looking for used refs in the "system" dir, and the "user" dir is
+ * shadowing it, meaning that if a ref is installed in the user dir it is considered used
+ * from there instead of @self. So, analyzed refs from @shadowing_dir are *not* put
+ * in @used_ref (although their dependencies may).
+ *
+ * Notes:
+ *  The "root" refs come from @shadowing_dir if not %NULL and @self otherwise.
+ *  refs_to_exclude, and metadata_injection both only affect @self, not @shadowing_dir
+ */
+static GHashTable *
+find_used_refs (FlatpakDir         *self,
+                FlatpakDir         *shadowing_dir, /* nullable */
+                const char         *arch,
+                GHashTable         *metadata_injection,
+                GHashTable         *refs_to_exclude,
+                GHashTable         *used_refs, /* This is filled in */
+                GCancellable       *cancellable,
+                GError            **error)
+{
+  g_auto(GStrv) root_app_refs = NULL;
+  g_auto(GStrv) root_runtime_refs = NULL;
+  g_autoptr(GHashTable) analyzed_refs = NULL;
+  g_autoptr(GQueue) refs_to_analyze = NULL;
+  FlatpakDir *root_ref_dir;
+  const char *ref_to_analyze;
+  int i;
+
+  refs_to_analyze = g_queue_new ();
+  analyzed_refs = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+
+  if (shadowing_dir)
+    root_ref_dir = shadowing_dir;
+  else
+    root_ref_dir = self;
+
+  if (!flatpak_dir_list_refs (root_ref_dir, "app", &root_app_refs, cancellable, error))
+    return NULL;
+
+  for (i = 0; root_app_refs[i] != NULL; i++)
+    queue_ref_for_analysis (root_app_refs[i], arch, analyzed_refs, refs_to_analyze);
+
+  if (!flatpak_dir_list_refs (root_ref_dir, "runtime", &root_runtime_refs, cancellable, error))
+    return NULL;
+
+  for (i = 0; root_runtime_refs[i] != NULL; i++)
+    {
+      /* Consider all shadow dir runtimes as roots because we don't really do full analysis for shadowing_dir.
+       * For example a system installed app could end up using the user version of a runtime, which in turn
+       * uses a system gl extension.
+       *
+       * However, for non-shadowed runtime refs, only pinned ones are roots */
+      if (root_ref_dir == shadowing_dir ||
+          flatpak_dir_ref_is_pinned (root_ref_dir, root_runtime_refs[i]))
+        queue_ref_for_analysis (root_runtime_refs[i], arch, analyzed_refs, refs_to_analyze);
+    }
+
+  /* Any injected refs are considered used, because this is used by transaction
+   * to emulate installing a new ref, and we never want the new ref:s dependencies
+   * seem ununsed. */
+  if (metadata_injection)
+    {
+      GLNX_HASH_TABLE_FOREACH (metadata_injection, const char *, injected_ref)
+        {
+          queue_ref_for_analysis (injected_ref, arch, analyzed_refs, refs_to_analyze);
+        }
+    }
+
+  while ((ref_to_analyze = g_queue_pop_head (refs_to_analyze)) != NULL)
+    {
+      g_autoptr(GKeyFile) metakey = NULL;
+      gboolean ref_is_shadowed;
+      gboolean is_app;
+      g_autoptr(GPtrArray) related = NULL;
+      const char *sdk;
+
+      if (!maybe_get_metakey (self, shadowing_dir, ref_to_analyze, metadata_injection,
+                              &metakey, &ref_is_shadowed))
+        continue; /* Something used something we could not find, that is fine and happens for instance with sdk dependencies */
+
+      if (!ref_is_shadowed)
+        {
+          /* Mark the analyzed ref used as it wasn't shadowed */
+          if (!g_hash_table_contains (used_refs, ref_to_analyze))
+            g_hash_table_add (used_refs, g_strdup (ref_to_analyze));
+
+          /* For excluded refs we mark them as used (above) so that they don't get listed as
+           * unused, but we don't analyze them for any dependencies. Note that refs_to_exclude only
+           * affects the base dir, so does not affect shadowed refs */
+          if (refs_to_exclude != NULL && g_hash_table_contains (refs_to_exclude, ref_to_analyze))
+            continue;
+        }
+
+      /************************************************
+       * Find all dependencies and queue for analysis *
+       ***********************************************/
+
+      is_app = g_str_has_prefix (ref_to_analyze, "app/");
+
+      /* App directly depends on its runtime */
+      if (is_app)
+        {
+          const char *runtime = g_key_file_get_string (metakey, "Application", "runtime", NULL);
+          if (runtime)
+            {
+              g_autofree char *runtime_ref = g_strconcat ("runtime/", runtime, NULL);
+              queue_ref_for_analysis (runtime_ref, arch, analyzed_refs, refs_to_analyze);
+            }
+        }
+
+      /* Both apps and runtims directly depends on its sdk, to avoid suddenly uninstalling something you use to develop the app */
+      sdk = g_key_file_get_string (metakey, is_app ? "Application" : "Runtime", "sdk", NULL);
+      if (sdk)
+        {
+          g_autofree char *sdk_ref = g_strconcat ("runtime/", sdk, NULL);
+          queue_ref_for_analysis (sdk_ref, arch, analyzed_refs, refs_to_analyze);
+        }
+
+      /* Extensions with extra data, that are not specially marked NoRuntime needs the runtime at install.
+       * Lets keep it around to not re-download it next update */
+      if (!is_app &&
+          g_key_file_has_group (metakey, "Extra Data") &&
+          !g_key_file_get_boolean (metakey, "Extra Data", "NoRuntime", NULL))
+        {
+          const char *extension_runtime_ref = g_key_file_get_string (metakey, "ExtensionOf", "runtime", NULL);
+          if (extension_runtime_ref != NULL)
+            queue_ref_for_analysis (extension_runtime_ref, arch, analyzed_refs, refs_to_analyze);
+        }
+
+      /* We pass NULL for remote-name here, because we want to consider related refs from all remotes */
+      related = flatpak_dir_find_local_related_for_metadata (self, ref_to_analyze, NULL, metakey, NULL, NULL);
+      for (i = 0; related != NULL && i < related->len; i++)
+        {
+          FlatpakRelated *rel = g_ptr_array_index (related, i);
+
+          if (!rel->auto_prune)
+            queue_ref_for_analysis (rel->ref, arch, analyzed_refs, refs_to_analyze);
+        }
+    }
+
+  return g_steal_pointer (&used_refs);
+}
+
+/* See the documentation for
+ * flatpak_installation_list_unused_refs_with_options().
+ * The returned pointer array is transfer full. */
+char **
+flatpak_dir_list_unused_refs (FlatpakDir         *self,
+                              const char         *arch,
+                              GHashTable         *metadata_injection,
+                              GHashTable         *eol_injection,
+                              const char * const *refs_to_exclude,
+                              gboolean            filter_by_eol,
+                              GCancellable       *cancellable,
+                              GError            **error)
+{
+  g_autoptr(GHashTable) used_refs = NULL;
+  g_autoptr(GHashTable) excluded_refs_ht = NULL;
+  g_autoptr(GPtrArray) refs =  NULL;
+  g_auto(GStrv) runtime_refs = NULL;
+  int i;
+
+  /* Convert refs_to_exclude to hashtable for fast repeated lookups */
+  if (refs_to_exclude)
+    {
+      excluded_refs_ht = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
+      for (i = 0; refs_to_exclude[i] != NULL; i++)
+        g_hash_table_add (excluded_refs_ht, (char *)refs_to_exclude[i]);
+    }
+
+  used_refs = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+
+  if (!find_used_refs (self, NULL, arch, metadata_injection, excluded_refs_ht,
+                       used_refs, cancellable, error))
+    return NULL;
+
+  /* If @self is a system installation, also check the per-user installation
+   * for any apps there using runtimes in the system installation or runtimes
+   * there with sdks or extensions in the system installation. Only do so if
+   * the per-user installation exists; it wouldn't make sense to create it here
+   * if not.
+   */
+  if (!flatpak_dir_is_user (self))
+    {
+      g_autoptr(GFile) user_base_dir = flatpak_get_user_base_dir_location ();
+      if (g_file_query_exists (user_base_dir, cancellable))
+        {
+          g_autoptr(FlatpakDir) user_dir = flatpak_dir_get_user ();
+
+          if (!find_used_refs (self, user_dir, arch, metadata_injection, excluded_refs_ht,
+                               used_refs, cancellable, error))
+            return NULL;
+        }
+    }
+
+  if (!flatpak_dir_list_refs (self, "runtime", &runtime_refs, cancellable, error))
+    return NULL;
+
+  refs = g_ptr_array_new_with_free_func (g_free);
+
+  for (i = 0; runtime_refs[i] != NULL; i++)
+    {
+      const char *ref = runtime_refs[i];
+
+      if (g_hash_table_contains (used_refs, ref))
+        continue;
+
+      if (!ref_is_arch (ref, arch))
+        continue;
+
+      if (filter_by_eol)
+        {
+          gboolean is_eol = FALSE;
+
+          if (eol_injection && g_hash_table_contains (eol_injection, ref))
+            {
+              is_eol = GPOINTER_TO_INT (g_hash_table_lookup (eol_injection, ref));
+            }
+          else
+            {
+              g_autoptr(GBytes) deploy_data = NULL;
+
+              deploy_data = flatpak_dir_get_deploy_data (self, ref, FLATPAK_DEPLOY_VERSION_ANY,
+                                                         cancellable, NULL);
+              is_eol = deploy_data != NULL &&
+                (flatpak_deploy_data_get_eol (deploy_data) != NULL ||
+                 flatpak_deploy_data_get_eol_rebase (deploy_data));
+            }
+
+          if (!is_eol)
+            {
+              g_debug ("Ref %s is not EOL, considering as used", ref);
+              continue;
+            }
+        }
+
+      g_ptr_array_add (refs, g_strdup (ref));
+    }
+
+  g_ptr_array_add (refs, NULL);
+  return (char **)g_ptr_array_free (g_steal_pointer (&refs), FALSE);
 }

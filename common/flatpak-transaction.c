@@ -126,6 +126,7 @@ struct _FlatpakTransactionOperation
   int                             run_after_count;
   int                             run_after_prio; /* Higher => run later (when it becomes runnable). Used to run related ops (runtime extensions) before deps (apps using the runtime) */
   GList                          *run_before_ops;
+  gboolean                        run_last;  /* Run this after all the other apps that are not run_last */
   FlatpakTransactionOperation    *fail_if_op_fails; /* main app/runtime for related extensions, runtime for apps */
   /* main app/runtime for related extensions, app for runtimes; could be multiple
    * related-to-ops if this op is for a runtime which is needed by multiple apps
@@ -164,6 +165,7 @@ struct _FlatpakTransactionPrivate
   GPtrArray                   *extra_sideload_repos;
   GList                       *ops;
   GPtrArray                   *added_origin_remotes;
+  GPtrArray                   *added_pinned_runtimes;
 
   GList                       *flatpakrefs; /* GKeyFiles */
   GList                       *bundles; /* BundleData */
@@ -177,6 +179,7 @@ struct _FlatpakTransactionPrivate
   char                        *parent_window;
   gboolean                     no_pull;
   gboolean                     no_deploy;
+  gboolean                     disable_auto_pin;
   gboolean                     disable_static_deltas;
   gboolean                     disable_prune;
   gboolean                     disable_deps;
@@ -184,6 +187,7 @@ struct _FlatpakTransactionPrivate
   gboolean                     reinstall;
   gboolean                     force_uninstall;
   gboolean                     can_run;
+  gboolean                     include_unused_uninstall_ops;
   char                        *default_arch;
   guint                        max_op;
 
@@ -527,8 +531,7 @@ flatpak_transaction_add_default_dependency_sources (FlatpakTransaction *self)
  */
 static gboolean
 ref_is_installed (FlatpakTransaction *self,
-                  const char         *ref,
-                  GError            **error)
+                  const char         *ref)
 {
   FlatpakTransactionPrivate *priv = flatpak_transaction_get_instance_private (self);
   g_autoptr(GFile) deploy_dir = NULL;
@@ -941,6 +944,7 @@ flatpak_transaction_finalize (GObject *object)
   g_clear_object (&priv->dir);
 
   g_ptr_array_unref (priv->added_origin_remotes);
+  g_ptr_array_unref (priv->added_pinned_runtimes);
 
   g_ptr_array_free (priv->extra_dependency_dirs, TRUE);
   g_ptr_array_free (priv->extra_sideload_repos, TRUE);
@@ -1349,6 +1353,7 @@ flatpak_transaction_init (FlatpakTransaction *self)
   priv->last_op_for_ref = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   priv->remote_states = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, (GDestroyNotify) flatpak_remote_state_unref);
   priv->added_origin_remotes = g_ptr_array_new_with_free_func (g_free);
+  priv->added_pinned_runtimes = g_ptr_array_new_with_free_func (g_free);
   priv->extra_dependency_dirs = g_ptr_array_new_with_free_func (g_object_unref);
   priv->extra_sideload_repos = g_ptr_array_new_with_free_func (g_free);
   priv->can_run = TRUE;
@@ -1563,6 +1568,26 @@ flatpak_transaction_set_disable_prune (FlatpakTransaction *self,
 }
 
 /**
+ * flatpak_transaction_set_disable_auto_pin:
+ * @self: a #FlatpakTransaction
+ * @disable_pin: whether to disable auto-pinning
+ *
+ * Normally the transaction pins any explicit installations so they will not
+ * be automatically removed. But this can be disabled if you don't want this
+ * behaviour.
+ *
+ * Since: 1.9.1
+ */
+void
+flatpak_transaction_set_disable_auto_pin  (FlatpakTransaction *self,
+                                           gboolean            disable_pin)
+{
+  FlatpakTransactionPrivate *priv = flatpak_transaction_get_instance_private (self);
+
+  priv->disable_auto_pin = disable_pin;
+}
+
+/**
  * flatpak_transaction_set_disable_dependencies:
  * @self: a #FlatpakTransaction
  * @disable_dependencies: whether to disable runtime dependencies
@@ -1668,6 +1693,50 @@ flatpak_transaction_set_default_arch (FlatpakTransaction *self,
 
   g_free (priv->default_arch);
   priv->default_arch = g_strdup (arch);
+}
+
+/**
+ * flatpak_transaction_set_include_unused_uninstall_ops:
+ * @self: a #FlatpakTransaction
+ * @include_unused_uninstall_ops: whether to include unused uninstall ops
+ *
+ * When this is set to %TRUE, Flatpak will add uninstall operations to the
+ * transaction for each runtime it considers unused. This is used by the
+ * "update" CLI command to garbage collect runtimes and free disk space.
+ *
+ * No guarantees are made about the exact hueristic used; e.g. only end-of-life
+ * unused runtimes may be uninstalled with this set. To see the full list of
+ * unused runtimes in an installation, use
+ * flatpak_installation_list_unused_refs().
+ *
+ * Since: 1.9.1
+ */
+void
+flatpak_transaction_set_include_unused_uninstall_ops (FlatpakTransaction *self,
+                                                      gboolean            include_unused_uninstall_ops)
+{
+  FlatpakTransactionPrivate *priv = flatpak_transaction_get_instance_private (self);
+
+  priv->include_unused_uninstall_ops = include_unused_uninstall_ops;
+}
+
+/**
+ * flatpak_transaction_get_include_unused_uninstall_ops:
+ * @self: a #FlatpakTransaction
+ *
+ * Gets the value set by
+ * flatpak_transaction_set_include_unused_uninstall_ops().
+ *
+ * Returns: %TRUE if include_unused_uninstall_ops is set, %FALSE otherwise
+ *
+ * Since: 1.9.1
+ */
+gboolean
+flatpak_transaction_get_include_unused_uninstall_ops (FlatpakTransaction *self)
+{
+  FlatpakTransactionPrivate *priv = flatpak_transaction_get_instance_private (self);
+
+  return priv->include_unused_uninstall_ops;
 }
 
 static FlatpakTransactionOperation *
@@ -1854,19 +1923,22 @@ run_operation_before (FlatpakTransactionOperation *op,
   before_this->run_after_prio = MAX (before_this->run_after_prio, prio);
 }
 
+static void
+run_operation_last (FlatpakTransactionOperation *op)
+{
+  op->run_last = TRUE;
+}
+
 static gboolean
-add_related (FlatpakTransaction          *self,
-             FlatpakTransactionOperation *op,
-             GError                     **error)
+op_get_related (FlatpakTransaction           *self,
+                FlatpakTransactionOperation  *op,
+                GPtrArray                   **out_related,
+                GError                      **error)
 {
   FlatpakTransactionPrivate *priv = flatpak_transaction_get_instance_private (self);
   g_autoptr(FlatpakRemoteState) state = NULL;
   g_autoptr(GPtrArray) related = NULL;
-  g_autoptr(GError) local_error = NULL;
-  int i;
-
-  if (priv->disable_related)
-    return TRUE;
+  g_autoptr(GError) related_error = NULL;
 
   if (op->kind != FLATPAK_TRANSACTION_OPERATION_UNINSTALL)
     {
@@ -1882,16 +1954,38 @@ add_related (FlatpakTransaction          *self,
     }
 
   if (transaction_is_local_only (self, op->kind))
-    related = flatpak_dir_find_local_related_for_metadata (priv->dir, op->ref, op->resolved_commit, op->remote, op->resolved_metakey,
-                                                           NULL, &local_error);
+    related = flatpak_dir_find_local_related_for_metadata (priv->dir, op->ref, op->remote, op->resolved_metakey,
+                                                           NULL, &related_error);
   else
     related = flatpak_dir_find_remote_related_for_metadata (priv->dir, state, op->ref, op->resolved_metakey,
-                                                            NULL, &local_error);
+                                                            NULL, &related_error);
+
+  if (related_error != NULL)
+    g_message (_("Warning: Problem looking for related refs: %s"), related_error->message);
+
+  if (out_related)
+    *out_related = g_steal_pointer (&related);
+
+  return TRUE;
+}
+
+static gboolean
+add_related (FlatpakTransaction          *self,
+             FlatpakTransactionOperation *op,
+             GError                     **error)
+{
+  FlatpakTransactionPrivate *priv = flatpak_transaction_get_instance_private (self);
+  g_autoptr(GPtrArray) related = NULL;
+  int i;
+
+  if (priv->disable_related)
+    return TRUE;
+
+  if (!op_get_related (self, op, &related, error))
+    return FALSE;
+
   if (related == NULL)
-    {
-      g_message (_("Warning: Problem looking for related refs: %s"), local_error->message);
-      return TRUE;
-    }
+    return TRUE;
 
   if (op->kind == FLATPAK_TRANSACTION_OPERATION_UNINSTALL)
     {
@@ -1983,20 +2077,13 @@ find_runtime_remote (FlatpakTransaction             *self,
   return NULL;
 }
 
-
-static gboolean
-add_deps (FlatpakTransaction          *self,
-          FlatpakTransactionOperation *op,
-          GError                     **error)
+static char *
+op_get_runtime_ref (FlatpakTransactionOperation *op)
 {
-  FlatpakTransactionPrivate *priv = flatpak_transaction_get_instance_private (self);
   g_autofree char *runtime_ref = NULL;
-  g_autofree char *full_runtime_ref = NULL;
-  g_autofree char *runtime_remote = NULL;
-  FlatpakTransactionOperation *runtime_op = NULL;
 
   if (!op->resolved_metakey)
-    return TRUE;
+    return NULL;
 
   /* Generally only app needs runtimes dependencies, not dependencies because you don't run extensions directly.
      However if the extension has extra data (and doesn't define NoRuntime) its also needed so we can run the
@@ -2008,9 +2095,27 @@ add_deps (FlatpakTransaction          *self,
     runtime_ref = g_key_file_get_string (op->resolved_metakey, "ExtensionOf", "runtime", NULL);
 
   if (runtime_ref == NULL)
+    return NULL;
+
+  return g_strconcat ("runtime/", runtime_ref, NULL);
+}
+
+static gboolean
+add_deps (FlatpakTransaction          *self,
+          FlatpakTransactionOperation *op,
+          GError                     **error)
+{
+  FlatpakTransactionPrivate *priv = flatpak_transaction_get_instance_private (self);
+  g_autofree char *full_runtime_ref = NULL;
+  g_autofree char *runtime_remote = NULL;
+  FlatpakTransactionOperation *runtime_op = NULL;
+
+  if (!op->resolved_metakey)
     return TRUE;
 
-  full_runtime_ref = g_strconcat ("runtime/", runtime_ref, NULL);
+  full_runtime_ref = op_get_runtime_ref (op);
+  if (full_runtime_ref == NULL)
+    return TRUE;
 
   runtime_op = flatpak_transaction_get_last_op_for_ref (self, full_runtime_ref);
 
@@ -2029,16 +2134,8 @@ add_deps (FlatpakTransaction          *self,
 
   if (runtime_op == NULL)
     {
-      g_autoptr(GError) local_error = NULL;
-
-      if (!ref_is_installed (self, full_runtime_ref, &local_error))
+      if (!ref_is_installed (self, full_runtime_ref))
         {
-          if (local_error != NULL)
-            {
-              g_propagate_error (error, g_steal_pointer (&local_error));
-              return FALSE;
-            }
-
           runtime_remote = find_runtime_remote (self, op->ref, op->remote, full_runtime_ref, op->kind, error);
           if (runtime_remote == NULL)
             return FALSE;
@@ -2222,6 +2319,7 @@ flatpak_transaction_add_install (FlatpakTransaction *self,
                                  const char        **subpaths,
                                  GError            **error)
 {
+  FlatpakTransactionPrivate *priv = flatpak_transaction_get_instance_private (self);
   const char *all_paths[] = { NULL };
 
   g_return_val_if_fail (ref != NULL, FALSE);
@@ -2231,7 +2329,26 @@ flatpak_transaction_add_install (FlatpakTransaction *self,
   if (subpaths == NULL)
     subpaths = all_paths;
 
-  return flatpak_transaction_add_ref (self, remote, ref, subpaths, NULL, NULL, FLATPAK_TRANSACTION_OPERATION_INSTALL, NULL, NULL, error);
+  if (!flatpak_transaction_add_ref (self, remote, ref, subpaths, NULL, NULL, FLATPAK_TRANSACTION_OPERATION_INSTALL, NULL, NULL, error))
+    return FALSE;
+
+  /* Pin runtimes that are installed explicitly rather than pulled as
+   * dependencies so they are not automatically removed. */
+  if (g_str_has_prefix (ref, "runtime/") && !priv->disable_auto_pin)
+    {
+      gboolean already_pinned;
+
+      if (!flatpak_dir_config_append_pattern (priv->dir, "pinned", ref, TRUE, &already_pinned, error))
+        return FALSE;
+
+      if (!already_pinned)
+        {
+          g_ptr_array_add (priv->added_pinned_runtimes, g_strdup (ref));
+          flatpak_installation_drop_caches (priv->installation, NULL, NULL);
+        }
+    }
+
+  return TRUE;
 }
 
 /**
@@ -2524,7 +2641,7 @@ emit_op_done (FlatpakTransaction          *self,
 }
 
 static GBytes *
-load_deployed_metadata (FlatpakTransaction *self, const char *ref, char **out_commit)
+load_deployed_metadata (FlatpakTransaction *self, const char *ref, char **out_commit, char **out_remote)
 {
   FlatpakTransactionPrivate *priv = flatpak_transaction_get_instance_private (self);
   g_autoptr(GFile) deploy_dir = NULL;
@@ -2536,14 +2653,17 @@ load_deployed_metadata (FlatpakTransaction *self, const char *ref, char **out_co
   if (deploy_dir == NULL)
     return NULL;
 
-  if (out_commit)
+  if (out_commit || out_remote)
     {
       g_autoptr(GBytes) deploy_data = NULL;
       deploy_data = flatpak_load_deploy_data (deploy_dir, ref, FLATPAK_DEPLOY_VERSION_ANY, NULL, NULL);
       if (deploy_data == NULL)
         return NULL;
 
-      *out_commit = g_strdup (flatpak_deploy_data_get_commit (deploy_data));
+      if (out_commit)
+        *out_commit = g_strdup (flatpak_deploy_data_get_commit (deploy_data));
+      if (out_remote)
+        *out_remote = g_strdup (flatpak_deploy_data_get_origin (deploy_data));
     }
 
   metadata_file = g_file_get_child (deploy_dir, "metadata");
@@ -2628,7 +2748,7 @@ resolve_op_end (FlatpakTransaction *self,
 {
   g_autoptr(GBytes) old_metadata_bytes = NULL;
 
-  old_metadata_bytes = load_deployed_metadata (self, op->ref, NULL);
+  old_metadata_bytes = load_deployed_metadata (self, op->ref, NULL, NULL);
   mark_op_resolved (op, checksum, sideload_path, metadata_bytes, old_metadata_bytes);
   emit_eol_and_maybe_skip (self, op);
  }
@@ -2760,7 +2880,7 @@ resolve_ops (FlatpakTransaction *self,
         {
           /* We resolve to the deployed metadata, because we need it to uninstall related ops */
 
-          metadata_bytes = load_deployed_metadata (self, op->ref, &checksum);
+          metadata_bytes = load_deployed_metadata (self, op->ref, &checksum, NULL);
           mark_op_resolved (op, checksum, NULL, metadata_bytes, NULL);
           continue;
         }
@@ -3356,6 +3476,13 @@ compare_op_ref (FlatpakTransactionOperation *a, FlatpakTransactionOperation *b)
 {
   char *aa = strchr (a->ref, '/');
   char *bb = strchr (b->ref, '/');
+
+  if (a->run_last != b->run_last)
+    {
+      if (a->run_last)
+        return 1;
+      return -1;
+    }
 
   return g_strcmp0 (aa, bb);
 }
@@ -4060,6 +4187,119 @@ flatpak_transaction_normalize_ops (FlatpakTransaction *self)
 }
 
 static gboolean
+add_uninstall_unused_ops (FlatpakTransaction  *self,
+                          GCancellable        *cancellable,
+                          GError             **error)
+{
+  FlatpakTransactionPrivate *priv = flatpak_transaction_get_instance_private (self);
+  g_autoptr(GHashTable) metadata_injection = NULL;
+  g_autoptr(GHashTable) eol_injection = NULL;
+  g_autoptr(GPtrArray) to_be_excluded = NULL;
+  g_auto(GStrv) old_unused_refs = NULL;
+  g_auto(GStrv) unused_refs = NULL;
+  const char * const *to_be_excluded_strv = NULL;
+  GList *l, *next;
+  int i;
+
+  if (priv->disable_deps)
+    return TRUE;
+
+  if (!priv->include_unused_uninstall_ops)
+    {
+      old_unused_refs = flatpak_dir_list_unused_refs (priv->dir,
+                                                      NULL, /* arch */
+                                                      NULL, /* metadata_injection */
+                                                      NULL, /* eol_injection */
+                                                      NULL, /* exclude_refs */
+                                                      TRUE, /* filter_by_eol */
+                                                      cancellable, error);
+      if (old_unused_refs == NULL)
+        return FALSE;
+    }
+
+  /* This is a mapping from refs to #GKeyFile metadata objects, for each ref
+   * being installed or updated by the transaction. This will allows us to
+   * calculate what dependencies will be used after those operations are
+   * executed. For example an app update may drop an extension point and
+   * thereby make an installed extension become unused. */
+  metadata_injection = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
+
+  eol_injection = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
+
+  /* This is the set of runtimes and apps scheduled for uninstallation and
+   * which are therefore excluded when calculating used refs. */
+  to_be_excluded = g_ptr_array_new ();
+
+  for (l = priv->ops; l != NULL; l = next)
+    {
+      FlatpakTransactionOperation *op = l->data;
+      FlatpakTransactionOperationType op_type = flatpak_transaction_operation_get_operation_type (op);
+
+      next = l->next;
+
+      if (op->skip)
+        continue;
+
+      g_assert (op_type == FLATPAK_TRANSACTION_OPERATION_UNINSTALL ||
+                op_type == FLATPAK_TRANSACTION_OPERATION_INSTALL ||
+                op_type == FLATPAK_TRANSACTION_OPERATION_INSTALL_BUNDLE ||
+                op_type == FLATPAK_TRANSACTION_OPERATION_UPDATE);
+
+      if (op_type == FLATPAK_TRANSACTION_OPERATION_UNINSTALL)
+        g_ptr_array_add (to_be_excluded, op->ref);
+      else
+        {
+          if (op->resolved_metakey)
+            g_hash_table_insert (metadata_injection, op->ref, op->resolved_metakey);
+          g_hash_table_insert (eol_injection, op->ref,
+                               GINT_TO_POINTER (op->eol != NULL || op->eol_rebase != NULL));
+        }
+    }
+
+  if (to_be_excluded->len > 0)
+    {
+      g_ptr_array_add (to_be_excluded, NULL);
+      to_be_excluded_strv = (const char * const *) to_be_excluded->pdata;
+    }
+
+  /* These are the refs that will be unused & eol after the transaction */
+  unused_refs = flatpak_dir_list_unused_refs (priv->dir,
+                                              NULL, /* arch */
+                                              metadata_injection,
+                                              eol_injection,
+                                              to_be_excluded_strv,
+                                              TRUE, /* filter_by_eol */
+                                              cancellable, error);
+  if (unused_refs == NULL)
+    return FALSE;
+
+  /* Schedule each unused runtime to be uninstalled */
+  for (i = 0; unused_refs[i] != NULL; i++)
+    {
+      FlatpakTransactionOperation *uninstall_op;
+      const char *unused_ref = unused_refs[i];
+      g_autofree char *origin = NULL;
+
+      /* Don't uninstall refs that were already unused before the transaction (unless include_unused_uninstall_ops is set) */
+      if (old_unused_refs &&
+          g_strv_contains ((const char * const*)old_unused_refs, unused_ref))
+        continue;
+
+      origin = flatpak_dir_get_origin (priv->dir, unused_ref, NULL, NULL);
+      if (origin)
+        {
+          /* These get added last and have no dependencies, so will run last */
+          uninstall_op = flatpak_transaction_add_op (self, origin, unused_ref,
+                                                     NULL, NULL, NULL, NULL,
+                                                     FLATPAK_TRANSACTION_OPERATION_UNINSTALL);
+          run_operation_last (uninstall_op);
+        }
+    }
+
+  return TRUE;
+}
+
+static gboolean
 flatpak_transaction_real_run (FlatpakTransaction *self,
                               GCancellable       *cancellable,
                               GError            **error)
@@ -4169,10 +4409,20 @@ flatpak_transaction_real_run (FlatpakTransaction *self,
       return FALSE;
     }
 
-  sort_ops (self);
-
   /* Ensure the operation kind is normalized and not no-op */
   flatpak_transaction_normalize_ops (self);
+
+  /* Add uninstall ops for things that are made unused by this transaction (and
+   * which match a heuristic). We don't need to do another round of
+   * resolve_all_ops() since uninstalls don't require that.
+   */
+  if (!add_uninstall_unused_ops (self, cancellable, error))
+    {
+      g_assert (error == NULL || *error != NULL);
+      return FALSE;
+    }
+
+  sort_ops (self);
 
   g_signal_emit (self, signals[READY], 0, &ready_res);
   if (!ready_res)
@@ -4267,6 +4517,16 @@ flatpak_transaction_real_run (FlatpakTransaction *self,
 
   for (i = 0; i < priv->added_origin_remotes->len; i++)
     flatpak_dir_prune_origin_remote (priv->dir, g_ptr_array_index (priv->added_origin_remotes, i));
+
+  for (i = 0; i < priv->added_pinned_runtimes->len; i++)
+    {
+      const char *pinned_runtime = g_ptr_array_index (priv->added_pinned_runtimes, i);
+      if (!dir_ref_is_installed (priv->dir, pinned_runtime, NULL, NULL))
+        {
+          flatpak_dir_config_remove_pattern (priv->dir, "pinned", pinned_runtime, NULL);
+          flatpak_installation_drop_caches (priv->installation, NULL, NULL);
+        }
+    }
 
   return succeeded;
 }

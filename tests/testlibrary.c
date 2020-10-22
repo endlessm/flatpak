@@ -935,7 +935,7 @@ test_list_refs_in_remotes (void)
   g_autofree char *repo_uri = NULL;
   g_autoptr(GHashTable) ref_specs = g_hash_table_new_full (g_str_hash,
                                                            g_str_equal,
-                                                           g_free,
+                                                           NULL,
                                                            NULL);
 
   create_multi_collection_id_repo (repo_dir);
@@ -968,7 +968,7 @@ test_list_refs_in_remotes (void)
   for (guint i = 0; i < refs1->len; ++i)
     {
       FlatpakRef *ref = g_ptr_array_index (refs1, i);
-      g_hash_table_add (ref_specs, flatpak_ref_format_ref (ref));
+      g_hash_table_add (ref_specs, (gpointer)flatpak_ref_format_ref_cached (ref));
     }
 
   /* Ensure that listing the refs by using a remote's URI will get us the
@@ -983,7 +983,7 @@ test_list_refs_in_remotes (void)
   for (guint i = 0; i < refs2->len; ++i)
     {
       FlatpakRef *ref = g_ptr_array_index (refs2, i);
-      g_autofree char *ref_spec = flatpak_ref_format_ref (ref);
+      const char *ref_spec = flatpak_ref_format_ref_cached (ref);
       g_assert_nonnull (g_hash_table_lookup (ref_specs, ref_spec));
     }
 }
@@ -3611,7 +3611,7 @@ test_instance (void)
   g_assert_no_error (error);
   g_assert_true (res);
 
-  flatpak_transaction_run (transaction, NULL, &error);
+  res = flatpak_transaction_run (transaction, NULL, &error);
   g_assert_no_error (error);
   g_assert_true (res);
 
@@ -3721,7 +3721,7 @@ test_update_subpaths (void)
   g_assert_no_error (error);
   g_assert_true (res);
 
-  flatpak_transaction_run (transaction, NULL, &error);
+  res = flatpak_transaction_run (transaction, NULL, &error);
   g_assert_no_error (error);
   g_assert_true (res);
 
@@ -4035,7 +4035,7 @@ test_list_installed_related_refs (void)
   g_assert_no_error (error);
   g_assert_true (res);
 
-  flatpak_transaction_run (transaction, NULL, &error);
+  res = flatpak_transaction_run (transaction, NULL, &error);
   g_assert_no_error (error);
   g_assert_true (res);
 
@@ -4086,7 +4086,7 @@ test_list_installed_related_refs (void)
   g_assert_no_error (error);
   g_assert_true (res);
 
-  flatpak_transaction_run (transaction, NULL, &error);
+  res = flatpak_transaction_run (transaction, NULL, &error);
   g_assert_no_error (error);
   g_assert_true (res);
 
@@ -4289,6 +4289,128 @@ test_installation_unused_refs (void)
   g_assert_cmpint (refs->len, ==, 0);
 }
 
+static void
+test_installation_unused_refs_excludes_pins (void)
+{
+  g_autoptr(FlatpakInstallation) inst = NULL;
+  g_autoptr(FlatpakTransaction) transaction = NULL;
+  g_autoptr(GPtrArray) refs = NULL;
+  g_autoptr(GError) error = NULL;
+  g_autofree char *runtime = NULL;
+  gboolean res;
+
+  runtime = g_strdup_printf ("runtime/org.test.Platform/%s/master",
+                             flatpak_get_default_arch ());
+
+  inst = flatpak_installation_new_user (NULL, &error);
+  g_assert_no_error (error);
+  g_assert_nonnull (inst);
+
+  empty_installation (inst);
+
+  transaction = flatpak_transaction_new_for_installation (inst, NULL, &error);
+  g_assert_no_error (error);
+  g_assert_nonnull (transaction);
+
+  res = flatpak_transaction_add_install (transaction, repo_name, runtime, NULL, &error);
+  g_assert_no_error (error);
+  g_assert_true (res);
+
+  res = flatpak_transaction_run (transaction, NULL, &error);
+  g_assert_no_error (error);
+  g_assert_true (res);
+
+  /* Even though the runtime is unused, it shouldn't show up in
+   * list_unused_refs() because it was installed explicitly not as a dependency
+   * of an app */
+  refs = flatpak_installation_list_unused_refs (inst, NULL, NULL, &error);
+  g_assert_nonnull (refs);
+  g_assert_no_error (error);
+  g_assert_cmpint (refs->len, ==, 0);
+}
+
+static void
+test_installation_unused_refs_across_installations (void)
+{
+  g_autoptr(FlatpakInstallation) system_inst = NULL;
+  g_autoptr(FlatpakInstallation) user_inst = NULL;
+  g_autoptr(FlatpakTransaction) transaction = NULL;
+  g_autoptr(GPtrArray) refs = NULL;
+  g_autoptr(GError) error = NULL;
+  g_autofree char *runtime = NULL;
+  g_autofree char *app = NULL;
+  FlatpakInstalledRef *unused_ref;
+  gboolean res;
+
+  runtime = g_strdup_printf ("runtime/org.test.Platform/%s/master",
+                             flatpak_get_default_arch ());
+  app = g_strdup_printf ("app/org.test.Hello/%s/master",
+                         flatpak_get_default_arch ());
+
+  system_inst = flatpak_installation_new_system (NULL, &error);
+  g_assert_no_error (error);
+  g_assert_nonnull (system_inst);
+
+  user_inst = flatpak_installation_new_user (NULL, &error);
+  g_assert_no_error (error);
+  g_assert_nonnull (user_inst);
+
+  empty_installation (system_inst);
+  empty_installation (user_inst);
+
+  add_remote_system ("test-runtime-only", NULL);
+
+  transaction = flatpak_transaction_new_for_installation (system_inst, NULL, &error);
+  g_assert_no_error (error);
+  g_assert_nonnull (transaction);
+
+  res = flatpak_transaction_add_install (transaction, "test-runtime-only-repo", runtime, NULL, &error);
+  g_assert_no_error (error);
+  g_assert_true (res);
+
+  res = flatpak_transaction_run (transaction, NULL, &error);
+  g_assert_no_error (error);
+  g_assert_true (res);
+  g_clear_object (&transaction);
+
+  /* Undo the pinning that happened as a side effect of the install */
+  const char *argv[] = { "flatpak", "pin", "--system", "--remove", runtime, NULL };
+  run_test_subprocess ((char **) argv, RUN_TEST_SUBPROCESS_DEFAULT);
+  flatpak_installation_drop_caches (system_inst, NULL, &error);
+  g_assert_no_error (error);
+
+  /* The runtime should show as unused */
+  refs = flatpak_installation_list_unused_refs (system_inst, NULL, NULL, &error);
+  g_assert_nonnull (refs);
+  g_assert_no_error (error);
+  g_assert_cmpint (refs->len, ==, 1);
+  unused_ref = g_ptr_array_index (refs, 0);
+  g_assert_cmpstr (flatpak_ref_get_name (FLATPAK_REF (unused_ref)), ==, "org.test.Platform");
+  g_clear_pointer (&refs, g_ptr_array_unref);
+
+  /* Install an app in the user installation that uses the runtime in the
+   * system installation */
+  transaction = flatpak_transaction_new_for_installation (user_inst, NULL, &error);
+  g_assert_no_error (error);
+  g_assert_nonnull (transaction);
+
+  flatpak_transaction_add_dependency_source (transaction, system_inst);
+
+  res = flatpak_transaction_add_install (transaction, repo_name, app, NULL, &error);
+  g_assert_no_error (error);
+  g_assert_true (res);
+
+  res = flatpak_transaction_run (transaction, NULL, &error);
+  g_assert_no_error (error);
+  g_assert_true (res);
+
+  /* Now the runtime should be used */
+  refs = flatpak_installation_list_unused_refs (system_inst, NULL, NULL, &error);
+  g_assert_nonnull (refs);
+  g_assert_no_error (error);
+  g_assert_cmpint (refs->len, ==, 0);
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -4339,6 +4461,8 @@ main (int argc, char *argv[])
   g_test_add_func ("/library/transaction-no-runtime", test_transaction_no_runtime);
   g_test_add_func ("/library/installation-no-interaction", test_installation_no_interaction);
   g_test_add_func ("/library/installation-unused-refs", test_installation_unused_refs);
+  g_test_add_func ("/library/installation-unused-refs-excludes-pins", test_installation_unused_refs_excludes_pins);
+  g_test_add_func ("/library/installation-unused-refs-across-installations", test_installation_unused_refs_across_installations);
 
   global_setup ();
 

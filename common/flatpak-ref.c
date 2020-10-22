@@ -57,6 +57,7 @@ struct _FlatpakRefPrivate
   char          *commit;
   FlatpakRefKind kind;
   char          *collection_id;
+  char          *cached_full_ref;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (FlatpakRef, flatpak_ref, G_TYPE_OBJECT)
@@ -83,6 +84,7 @@ flatpak_ref_finalize (GObject *object)
   g_free (priv->branch);
   g_free (priv->commit);
   g_free (priv->collection_id);
+  g_free ((char *)g_atomic_pointer_get (&priv->cached_full_ref));
 
   G_OBJECT_CLASS (flatpak_ref_parent_class)->finalize (object);
 }
@@ -99,22 +101,22 @@ flatpak_ref_set_property (GObject      *object,
   switch (prop_id)
     {
     case PROP_NAME:
-      g_clear_pointer (&priv->name, g_free);
+      g_assert (priv->name == NULL); /* Construct-only */
       priv->name = g_value_dup_string (value);
       break;
 
     case PROP_ARCH:
-      g_clear_pointer (&priv->arch, g_free);
+      g_assert (priv->arch == NULL); /* Construct-only */
       priv->arch = g_value_dup_string (value);
       break;
 
     case PROP_BRANCH:
-      g_clear_pointer (&priv->branch, g_free);
+      g_assert (priv->branch == NULL); /* Construct-only */
       priv->branch = g_value_dup_string (value);
       break;
 
     case PROP_COMMIT:
-      g_clear_pointer (&priv->commit, g_free);
+      g_assert (priv->commit == NULL); /* Construct-only */
       priv->commit = g_value_dup_string (value);
       break;
 
@@ -123,7 +125,7 @@ flatpak_ref_set_property (GObject      *object,
       break;
 
     case PROP_COLLECTION_ID:
-      g_clear_pointer (&priv->collection_id, g_free);
+      g_assert (priv->collection_id == NULL); /* Construct-only */
       priv->collection_id = g_value_dup_string (value);
       break;
 
@@ -338,6 +340,37 @@ flatpak_ref_format_ref (FlatpakRef *self)
     return flatpak_build_runtime_ref (priv->name,
                                       priv->branch,
                                       priv->arch);
+}
+
+/**
+ * flatpak_ref_format_ref_cached:
+ * @self: a #FlatpakRef
+ *
+ * Like flatpak_ref_format_ref() but this returns the same string each time
+ * it's called rather than allocating a new one.
+ *
+ * Returns: (transfer none): string representation
+ *
+ * Since: 1.9.1
+ */
+const char *
+flatpak_ref_format_ref_cached (FlatpakRef *self)
+{
+  FlatpakRefPrivate *priv = flatpak_ref_get_instance_private (self);
+  const char *full_ref;
+  char *full_ref_new;
+
+  full_ref = (const char *)g_atomic_pointer_get (&priv->cached_full_ref);
+  if (full_ref == NULL)
+    {
+      full_ref_new = flatpak_ref_format_ref (self);
+      if (!g_atomic_pointer_compare_and_exchange ((void**) &priv->cached_full_ref, NULL, full_ref_new))
+        g_free (full_ref_new); /* Raced with someone, free our version */
+
+      full_ref = (const char *)g_atomic_pointer_get (&priv->cached_full_ref); /* Now guaranteed to be non-NULL */
+    }
+
+  return full_ref;
 }
 
 /**

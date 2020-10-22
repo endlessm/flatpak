@@ -221,6 +221,9 @@ FLATPAK_EXTERN
 void                flatpak_transaction_set_disable_related (FlatpakTransaction *self,
                                                              gboolean            disable_related);
 FLATPAK_EXTERN
+void                flatpak_transaction_set_disable_auto_pin  (FlatpakTransaction *self,
+                                                               gboolean            disable_pin);
+FLATPAK_EXTERN
 void                flatpak_transaction_set_reinstall (FlatpakTransaction *self,
                                                        gboolean            reinstall);
 FLATPAK_EXTERN
@@ -237,6 +240,11 @@ void                flatpak_transaction_set_parent_window (FlatpakTransaction *s
                                                            const char *parent_window);
 FLATPAK_EXTERN
 const char *        flatpak_transaction_get_parent_window (FlatpakTransaction *self);
+FLATPAK_EXTERN
+void                flatpak_transaction_set_include_unused_uninstall_ops (FlatpakTransaction *self,
+                                                                          gboolean            include_unused_uninstall_ops);
+FLATPAK_EXTERN
+gboolean            flatpak_transaction_get_include_unused_uninstall_ops (FlatpakTransaction *self);
 FLATPAK_EXTERN
 void                flatpak_transaction_add_dependency_source (FlatpakTransaction  *self,
                                                                FlatpakInstallation *installation);
