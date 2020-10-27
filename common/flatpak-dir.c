@@ -75,7 +75,7 @@
 
 #define NO_SYSTEM_HELPER ((FlatpakSystemHelper *) (gpointer) 1)
 
-#define SUMMARY_CACHE_TIMEOUT_SEC 5 *60
+#define SUMMARY_CACHE_TIMEOUT_SEC (60 * 5)
 #define FILTER_MTIME_CHECK_TIMEOUT_MSEC 500
 
 #define SYSCONF_INSTALLATIONS_DIR "installations.d"
@@ -345,6 +345,7 @@ flatpak_remote_state_unref (FlatpakRemoteState *remote_state)
       g_free (remote_state->remote_name);
       g_free (remote_state->collection_id);
       g_clear_pointer (&remote_state->summary, g_variant_unref);
+      g_clear_pointer (&remote_state->summary_bytes, g_bytes_unref);
       g_clear_pointer (&remote_state->summary_sig_bytes, g_bytes_unref);
       g_clear_error (&remote_state->summary_fetch_error);
       g_clear_pointer (&remote_state->allow_refs, g_regex_unref);
@@ -4797,6 +4798,7 @@ repo_get_remote_collection_id (OstreeRepo *repo,
  * collection-based and normal pulls. Update @builder in place. */
 static void
 get_common_pull_options (GVariantBuilder     *builder,
+                         FlatpakRemoteState  *state,
                          const char          *ref_to_fetch,
                          const char          *token,
                          const gchar * const *dirs_to_pull,
@@ -4807,6 +4809,14 @@ get_common_pull_options (GVariantBuilder     *builder,
 {
   guint32 update_interval = 0;
   GVariantBuilder hdr_builder;
+
+  if (state->summary_bytes && state->summary_sig_bytes)
+    {
+      g_variant_builder_add (builder, "{s@v}", "summary-bytes",
+                             g_variant_new_variant (g_variant_new_from_bytes (G_VARIANT_TYPE ("ay"), state->summary_bytes, TRUE)));
+      g_variant_builder_add (builder, "{s@v}", "summary-sig-bytes",
+                             g_variant_new_variant (g_variant_new_from_bytes (G_VARIANT_TYPE ("ay"), state->summary_sig_bytes, TRUE)));
+    }
 
   if (dirs_to_pull)
     {
@@ -4906,7 +4916,7 @@ repo_pull (OstreeRepo                           *self,
 
   /* Pull options */
   g_variant_builder_init (&builder, G_VARIANT_TYPE ("a{sv}"));
-  get_common_pull_options (&builder, ref_to_fetch, token, dirs_to_pull, current_checksum,
+  get_common_pull_options (&builder, state, ref_to_fetch, token, dirs_to_pull, current_checksum,
                            force_disable_deltas, flags, progress);
 
   if (sideload_repo)
@@ -10745,7 +10755,7 @@ flatpak_dir_lookup_cached_summary (FlatpakDir *self,
   if (summary)
     {
       guint64 now = g_get_monotonic_time ();
-      if ((now - summary->time) < (1000 * 1000 * (SUMMARY_CACHE_TIMEOUT_SEC)) &&
+      if ((now - summary->time) / G_USEC_PER_SEC < SUMMARY_CACHE_TIMEOUT_SEC &&
           strcmp (url, summary->url) == 0)
         {
           /* g_debug ("Using cached summary for remote %s", name); */
@@ -10758,6 +10768,15 @@ flatpak_dir_lookup_cached_summary (FlatpakDir *self,
                 *bytes_sig_out = NULL;
             }
           res = TRUE;
+
+          /* Bump the cache expiry time */
+          summary->time = now;
+        }
+      else
+        {
+          /* Timed out or URL has changed; remove the entry */
+          g_hash_table_remove (self->summary_cache, name);
+          res = FALSE;
         }
     }
 
@@ -10914,7 +10933,7 @@ flatpak_dir_remote_fetch_summary (FlatpakDir   *self,
 
   is_local = g_str_has_prefix (url, "file:");
 
-  /* No caching for local files */
+  /* No in-memory caching for local files */
   if (!is_local)
     {
       if (flatpak_dir_lookup_cached_summary (self, out_summary, out_summary_sig, name_or_uri, url))
@@ -11042,6 +11061,7 @@ _flatpak_dir_get_remote_state (FlatpakDir   *self,
 
           state->summary_sig_bytes = g_bytes_ref (opt_summary_sig);
         }
+      state->summary_bytes = g_bytes_ref (opt_summary);
       state->summary = g_variant_ref_sink (g_variant_new_from_bytes (OSTREE_SUMMARY_GVARIANT_FORMAT,
                                                                      opt_summary, FALSE));
     }
@@ -11057,6 +11077,7 @@ _flatpak_dir_get_remote_state (FlatpakDir   *self,
           state->summary_sig_bytes = g_steal_pointer (&summary_sig_bytes);
           state->summary = g_variant_ref_sink (g_variant_new_from_bytes (OSTREE_SUMMARY_GVARIANT_FORMAT,
                                                                          summary_bytes, FALSE));
+          state->summary_bytes = g_steal_pointer (&summary_bytes);
         }
       else
         {
