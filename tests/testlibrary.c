@@ -4467,6 +4467,13 @@ test_installation_unused_refs_across_installations (void)
   FlatpakInstalledRef *unused_ref;
   gboolean res;
 
+  /* FIXME: Skip this unit test for now since installation into the system
+   * rather than user flatpak installation fails in the OBS build environment.
+   * See https://phabricator.endlessm.com/T31027
+   */
+  g_test_skip ("system installation not supported on OBS workers");
+  return;
+
   runtime = g_strdup_printf ("runtime/org.test.Platform/%s/master",
                              flatpak_get_default_arch ());
   app = g_strdup_printf ("app/org.test.Hello/%s/master",
