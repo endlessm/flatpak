@@ -1,3 +1,9 @@
+flatpak (1.8.2-1endless2) master; urgency=medium
+
+  * Install system environment generator (T30972)
+
+ -- Philip Withnall <pwithnall@endlessos.org>  Wed, 28 Oct 2020 17:17:00 +0000
+
 flatpak (1.8.2-1endless1) master; urgency=medium
 
   * New upstream stable release
