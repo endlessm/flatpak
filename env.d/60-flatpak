@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Only include the ~/.local/share/flatpak path if this is being run as a *user*
+# environment generator. If run as a *system* environment generator, only
+# include the system installations.
+if [[ "$(basename $(dirname $0))" == "user-environment-generators" ]]; then
+    include_home=1
+else
+    include_home=0
+fi
+
 new_dirs=
 while read -r install_path
 do
@@ -9,7 +18,7 @@ do
         *":$share_path/:"*) :;;
         *) new_dirs=${new_dirs:+${new_dirs}:}$share_path;;
     esac
-done < <(echo "${XDG_DATA_HOME:-"$HOME/.local/share"}/flatpak"; flatpak  --installations)
+done < <(if [[ $include_home == 1 ]]; then echo "${XDG_DATA_HOME:-"$HOME/.local/share"}/flatpak"; fi; flatpak  --installations)
 
 XDG_DATA_DIRS="${new_dirs:+${new_dirs}:}${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
 echo "XDG_DATA_DIRS=$XDG_DATA_DIRS"

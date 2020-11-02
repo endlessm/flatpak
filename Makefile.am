@@ -172,8 +172,11 @@ flatpak.env: env.d/flatpak.env.in
 		-e "s|\@externalinstalldir\@|$(EXTERNAL_INSTALL_DIR)|" \
 		$< > $@
 
-envgendir = $(systemduserenvgendir)
-envgen_SCRIPTS = env.d/60-flatpak
+systemenvgendir = $(systemdsystemenvgendir)
+systemenvgen_SCRIPTS = env.d/60-flatpak
+
+userenvgendir = $(systemduserenvgendir)
+userenvgen_SCRIPTS = env.d/60-flatpak
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = flatpak.pc
