@@ -9413,7 +9413,8 @@ flatpak_dir_needs_update_for_commit_and_subpaths (FlatpakDir  *self,
   if (*url == 0)
     return FALSE;
 
-  deploy_data = flatpak_dir_get_deploy_data (self, ref, FLATPAK_DEPLOY_VERSION_ANY, NULL, NULL);
+  /* deploy v4 guarantees alt-id/extension-of info */
+  deploy_data = flatpak_dir_get_deploy_data (self, ref, 4, NULL, NULL);
   if (deploy_data != NULL)
     old_subpaths = flatpak_deploy_data_get_subpaths (deploy_data);
   else
@@ -9835,7 +9836,8 @@ flatpak_dir_uninstall (FlatpakDir                 *self,
       flatpak_dir_list_refs (self, "app", &app_refs, NULL, NULL);
       for (i = 0; app_refs != NULL && app_refs[i] != NULL; i++)
         {
-          g_autoptr(GBytes) deploy_data = flatpak_dir_get_deploy_data (self, app_refs[i], FLATPAK_DEPLOY_VERSION_ANY, NULL, NULL);
+          /* deploy v4 guarantees runtime info */
+          g_autoptr(GBytes) deploy_data = flatpak_dir_get_deploy_data (self, app_refs[i], 4, NULL, NULL);
 
           if (deploy_data)
             {
@@ -15300,7 +15302,8 @@ flatpak_dir_list_unused_refs (FlatpakDir         *self,
             {
               g_autoptr(GBytes) deploy_data = NULL;
 
-              deploy_data = flatpak_dir_get_deploy_data (self, ref, FLATPAK_DEPLOY_VERSION_ANY,
+              /* deploy v4 guarantees eol/eolr info */
+              deploy_data = flatpak_dir_get_deploy_data (self, ref, 4,
                                                          cancellable, NULL);
               is_eol = deploy_data != NULL &&
                 (flatpak_deploy_data_get_eol (deploy_data) != NULL ||
