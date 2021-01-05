@@ -2684,7 +2684,9 @@ load_deployed_metadata (FlatpakTransaction *self, const char *ref, char **out_co
   if (out_commit || out_remote)
     {
       g_autoptr(GBytes) deploy_data = NULL;
-      deploy_data = flatpak_load_deploy_data (deploy_dir, ref, FLATPAK_DEPLOY_VERSION_ANY, NULL, NULL);
+      deploy_data = flatpak_load_deploy_data (deploy_dir, ref,
+                                              flatpak_dir_get_repo (priv->dir),
+                                              FLATPAK_DEPLOY_VERSION_ANY, NULL, NULL);
       if (deploy_data == NULL)
         return NULL;
 
@@ -4497,7 +4499,8 @@ flatpak_transaction_real_run (FlatpakTransaction *self,
       if (res)
         {
           g_autoptr(GBytes) deploy_data = NULL;
-          deploy_data = flatpak_dir_get_deploy_data (priv->dir, op->ref, FLATPAK_DEPLOY_VERSION_ANY, NULL, NULL);
+          /* deploy v4 guarantees eol/eolr info */
+          deploy_data = flatpak_dir_get_deploy_data (priv->dir, op->ref, 4, NULL, NULL);
 
           if (deploy_data)
             {
