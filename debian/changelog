@@ -1,3 +1,9 @@
+flatpak (1.10.2-1endless0) eos; urgency=medium
+
+  * Rebase on 1.10.2-1 release from Debian Unstable (T31594)
+
+ -- Philip Withnall <pwithnall@endlessos.org>  Mon, 10 May 2021 15:27:00 +0100
+
 flatpak (1.10.2-1) unstable; urgency=medium
 
   * New upstream stable release
