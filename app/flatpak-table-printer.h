@@ -96,5 +96,9 @@ void               flatpak_table_printer_set_column_ellipsize (FlatpakTablePrint
 void               flatpak_table_printer_set_column_skip_unique (FlatpakTablePrinter *printer,
                                                                  int                  column,
                                                                  gboolean             skip_unique);
+void               flatpak_table_printer_set_column_skip_unique_string (FlatpakTablePrinter *printer,
+                                                                        int                  column,
+                                                                        const char          *str);
+
 
 #endif /* __FLATPAK_TABLE_PRINTER_H__ */
