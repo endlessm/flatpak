@@ -3160,6 +3160,11 @@ resolve_ops (FlatpakTransaction *self,
           /* We resolve to the deployed metadata, because we need it to uninstall related ops */
 
           metadata_bytes = load_deployed_metadata (self, op->ref, &checksum, NULL);
+          if (metadata_bytes == NULL)
+            {
+              op->skip = TRUE;
+              continue;
+            }
           if (!mark_op_resolved (op, checksum, NULL, metadata_bytes, NULL, error))
             return FALSE;
           continue;
