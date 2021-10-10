@@ -1,4 +1,4 @@
-flatpak (1.10.5-0+deb11u1) UNRELEASED; urgency=medium
+flatpak (1.10.5-0+deb11u1) bullseye-security; urgency=medium
 
   * New upstream stable release 1.10.4
     - Don't allow VFS manipulation which could be used to trick portals
@@ -26,7 +26,7 @@ flatpak (1.10.5-0+deb11u1) UNRELEASED; urgency=medium
   * d/p/Fix-handling-of-syscalls-only-allowed-by-devel.patch:
     Fix error handling for syscalls that are only allowed with --devel
 
- -- Simon McVittie <smcv@debian.org>  Sun, 10 Oct 2021 13:55:18 +0100
+ -- Simon McVittie <smcv@debian.org>  Sun, 10 Oct 2021 14:14:51 +0100
 
 flatpak (1.10.3-0+deb11u1) bullseye; urgency=medium
 
