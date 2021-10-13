@@ -1,3 +1,10 @@
+flatpak (1.10.5-0endless1) eos; urgency=medium
+
+  * Rebase on Debian Bullseye 1.10.5 release (T32636)
+    - Plus a few additional patches from what will become 1.10.6
+
+ -- Philip Withnall <pwithnall@endlessos.org>  Wed, 13 Oct 2021 14:53:00 +0100
+
 flatpak (1.10.5-0+deb11u1) bullseye-security; urgency=medium
 
   * New upstream stable release 1.10.4
