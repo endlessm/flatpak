@@ -1,24 +1,23 @@
-flatpak (1.10.6-0+deb11u1) UNRELEASED; urgency=high
+flatpak (1.10.7-0+deb11u1) UNRELEASED; urgency=high
 
   * New upstream stable release
   * Security fixes:
     - Prevent a malicious repository from arranging for permissions to be
       granted without being correctly displayed during installation
       (CVE-2021-43860, GHSA-qpjc-vq3c-572j)
-    - Prevent a malicious build in flatpak-builder creating directories
-      outside the build directory (GHSA-8ch7-5j3h-g4fx)
-  * Behaviour changes, as a result of how GHSA-8ch7-5j3h-g4fx was fixed:
-    - --nofilesystem=host is now special-cased to negate all --filesystem
-      permissions. Previously, it would cancel out --filesystem=host but
-      not --filesystem=/some/dir.
-    - --nofilesystem=home is now special-cased to negate several
-      home-directory-related filesystem permssions such as
-      --filesystem=xdg-config/foo, not just --filesystem=host.
+    - Provide a new --nofilesystem=host:reset option which flatpak-builder
+      can use to prevent malicious builds from creating directories
+      outside the build directory (CVE-2022-21682, GHSA-8ch7-5j3h-g4fx)
   * Other bug fixes:
     - Fix error handling for syscalls that are only allowed with --devel
       (this change was already included in 1.10.5-0+deb11u1)
     - Improve diagnostic messages when seccomp rules cannot be applied
     - Update Polish translation
+    - Clarify documentation related to CVE-2022-21682
+    - Improve test coverage related to CVE-2022-21682
+    - Be compatible with newer versions of python3-pyparsing
+      (the version in Debian 11 generates identical code before and
+      after this change)
   * d/p/Fix-handling-of-syscalls-only-allowed-by-devel.patch:
     Drop patch, included in 1.10.6
   * d/copyright: Update
