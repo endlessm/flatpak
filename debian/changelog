@@ -1,4 +1,4 @@
-flatpak (1.10.6-0+deb11u1) bullseye-security; urgency=medium
+flatpak (1.10.6-0+deb11u1) UNRELEASED; urgency=high
 
   * New upstream stable release
   * Security fixes:
@@ -22,13 +22,8 @@ flatpak (1.10.6-0+deb11u1) bullseye-security; urgency=medium
   * d/p/Fix-handling-of-syscalls-only-allowed-by-devel.patch:
     Drop patch, included in 1.10.6
   * d/copyright: Update
-  * d/p/test-metadata-validation.sh-Ensure-that-mtimes-change-bet.patch:
-    Add a patch to make unit tests more reliable.
-    This doesn't seem to be necessary with 1.12.3, but the 1.10.x tests
-    are unreliable without it, because repository changes aren't always
-    picked up and so the previous test fixture gets reused.
 
- -- Simon McVittie <smcv@debian.org>  Wed, 12 Jan 2022 18:08:47 +0000
+ -- Simon McVittie <smcv@debian.org>  Wed, 12 Jan 2022 15:21:29 +0000
 
 flatpak (1.10.5-0+deb11u1) bullseye-security; urgency=medium
 
