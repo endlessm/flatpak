@@ -1,3 +1,10 @@
+flatpak (1.10.7-0endless1+deb11u1) bullseye; urgency=medium
+
+  * Rebuild for infrastructure (T33441)
+   - Remove eosmetrics build dependency
+
+ -- Dan Nicholson <dbn@endlessos.org>  Thu, 28 Apr 2022 06:44:35 -0600
+
 flatpak (1.10.7-0endless1) master; urgency=medium
 
   * Rebase on Debian Bullseye 1.10.7 release (T32961)
