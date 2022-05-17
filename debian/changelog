@@ -1,3 +1,11 @@
+flatpak (1.12.7-1~bpo11+1endless1) master; urgency=medium
+
+  * Rebase on Debian Bullseye backports 1.12.7 release (T33491)
+    - Add eos-metrics dependency
+    - Enable USB sideloading from /run/media
+
+ -- Will Thompson <wjt@endlessos.org>  Tue, 17 May 2022 16:13:57 +0100
+
 flatpak (1.12.7-1~bpo11+1) bullseye-backports; urgency=medium
 
   * Rebuild for bullseye-backports.
