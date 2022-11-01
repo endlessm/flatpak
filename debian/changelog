@@ -1,3 +1,9 @@
+flatpak (1.12.7-1~bpo11+1endless2) master; urgency=medium
+
+  * Add tmpfiles.d snippet for deleting leaked deploy tmpdirs (T33923)
+
+ -- Philip Withnall <pwithnall@endlessos.org>  Tue, 01 Nov 2022 15:47:00 +0000
+
 flatpak (1.12.7-1~bpo11+1endless1) master; urgency=medium
 
   * Rebase on Debian Bullseye backports 1.12.7 release (T33491)
