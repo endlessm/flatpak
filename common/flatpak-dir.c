@@ -632,6 +632,11 @@ get_summary_for_ref (FlatpakRemoteState *self,
 
       if (arch != NULL)
         summary = g_hash_table_lookup (self->subsummaries, arch);
+      else if (g_strcmp0 (ref, OSTREE_REPO_METADATA_REF) == 0)
+        /* Endless-specific: Use the primary arch subsummary for the
+         * ostree-metadata ref.
+         */
+        summary = g_hash_table_lookup (self->subsummaries, flatpak_get_arch ());
 
       if (summary == NULL && arch != NULL)
         {
@@ -14716,6 +14721,7 @@ _flatpak_dir_fetch_remote_state_metadata_branch (FlatpakDir         *self,
   gboolean gpg_verify;
   g_autofree char *checksum_from_summary = NULL;
   g_autofree char *checksum_from_repo = NULL;
+  g_autoptr(GError) local_error = NULL;
 
   g_assert (state->collection_id != NULL);
 
@@ -14730,10 +14736,18 @@ _flatpak_dir_fetch_remote_state_metadata_branch (FlatpakDir         *self,
   /* Look up the checksum as advertised by the summary file. If it differs from
    * what we currently have on disk, try and pull the updated ostree-metadata ref.
    * This is how we implement caching. Ignore failure and pull the ref anyway. */
-  if (state->summary != NULL)
-    flatpak_summary_lookup_ref (state->summary, state->collection_id,
-                                OSTREE_REPO_METADATA_REF,
-                                &checksum_from_summary, NULL);
+  if (!flatpak_remote_state_lookup_ref (state, OSTREE_REPO_METADATA_REF,
+                                        &checksum_from_summary, NULL, NULL, NULL,
+                                        &local_error))
+    {
+      if (!g_error_matches (local_error, FLATPAK_ERROR, FLATPAK_ERROR_REF_NOT_FOUND))
+        {
+          g_propagate_error (error, g_steal_pointer (&local_error));
+          return FALSE;
+        }
+
+      g_clear_error (&local_error);
+    }
 
   if (!flatpak_repo_resolve_rev (self->repo, state->collection_id, state->remote_name,
                                  OSTREE_REPO_METADATA_REF, TRUE, &checksum_from_repo,

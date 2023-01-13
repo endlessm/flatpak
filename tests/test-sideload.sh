@@ -32,11 +32,6 @@ echo "1..9"
 #Regular repo
 setup_repo
 
-# Endless-specific: bring back the ostree-metadata ref and then
-# regenerate the appropriate flatpak repo metadata.
-ostree --repo=repos/test summary --update ${FL_GPGARGS}
-update_repo
-
 # Ensure we have the full locale extension:
 ${FLATPAK} ${U} config  --set languages "*"
 

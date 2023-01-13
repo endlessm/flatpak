@@ -379,6 +379,95 @@ take_ongoing_pull_by_dir (const gchar *src_dir)
   return pull;
 }
 
+/* Endless-specific: Handle deploying the ostree-metadata ref. This is
+ * essentially a slimmed down version of the appstream deploy handler
+ * since the ref just needs to be pulled and not actually deployed.
+ */
+static gboolean
+_handle_deploy_ostree_metadata (FlatpakSystemHelper   *object,
+                                GDBusMethodInvocation *invocation,
+                                FlatpakDir            *system,
+                                const gchar           *arg_repo_path,
+                                const gchar           *arg_origin)
+{
+  g_autoptr(GError) error = NULL;
+
+  if (!flatpak_dir_ensure_repo (system, NULL, &error))
+    {
+      g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+                                             "Can't open system repo %s", error->message);
+      return G_DBUS_METHOD_INVOCATION_HANDLED;
+    }
+
+  if (flatpak_dir_get_remote_oci (system, arg_origin))
+    {
+      g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_INVALID_ARGS,
+                                             "Cannot request %s ref from OCI remote",
+                                             OSTREE_REPO_METADATA_REF);
+      return G_DBUS_METHOD_INVOCATION_HANDLED;
+    }
+
+  if (strlen (arg_repo_path) > 0)
+    {
+      if (!flatpak_dir_pull_untrusted_local (system, arg_repo_path,
+                                             arg_origin,
+                                             OSTREE_REPO_METADATA_REF,
+                                             NULL,
+                                             NULL,
+                                             NULL,
+                                             &error))
+        {
+          g_prefix_error (&error, "Error updating %s: ", OSTREE_REPO_METADATA_REF);
+          g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+                                                 "Error pulling from repo: %s", error->message);
+          return G_DBUS_METHOD_INVOCATION_HANDLED;
+        }
+    }
+  else /* empty path == local pull */
+    {
+      g_autoptr(FlatpakRemoteState) state = NULL;
+      g_autofree char *url = NULL;
+
+      if (!ostree_repo_remote_get_url (flatpak_dir_get_repo (system),
+                                       arg_origin,
+                                       &url,
+                                       &error))
+        {
+          flatpak_invocation_return_error (invocation, error, "Error getting remote url");
+          return G_DBUS_METHOD_INVOCATION_HANDLED;
+        }
+
+      if (!g_str_has_prefix (url, "file:"))
+        {
+          g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+                                                 "Local pull url doesn't start with file://");
+          return G_DBUS_METHOD_INVOCATION_HANDLED;
+        }
+
+      state = flatpak_dir_get_remote_state_optional (system, arg_origin, FALSE, NULL, &error);
+      if (state == NULL)
+        {
+          flatpak_invocation_return_error (invocation, error, "Error getting remote state");
+          return G_DBUS_METHOD_INVOCATION_HANDLED;
+        }
+
+      if (!flatpak_dir_pull (system, state, OSTREE_REPO_METADATA_REF,
+                             NULL, NULL, NULL, NULL, NULL, NULL,
+                             FLATPAK_PULL_FLAGS_NONE, OSTREE_REPO_PULL_FLAGS_UNTRUSTED, NULL,
+                             NULL, &error))
+        {
+          g_prefix_error (&error, "Error updating %s: ", OSTREE_REPO_METADATA_REF);
+          g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+                                                 "Error pulling from repo: %s", error->message);
+          return G_DBUS_METHOD_INVOCATION_HANDLED;
+        }
+    }
+
+  flatpak_system_helper_complete_deploy (object, invocation);
+
+  return G_DBUS_METHOD_INVOCATION_HANDLED;
+}
+
 static gboolean
 handle_deploy (FlatpakSystemHelper   *object,
                GDBusMethodInvocation *invocation,
@@ -473,6 +562,17 @@ handle_deploy (FlatpakSystemHelper   *object,
           ongoing_pull->preserve_pull = FALSE;
         }
     }
+
+  /* Endless-specific: Handle deploying the ostree-metadata ref. This
+   * will return early since the rest of this function expects to
+   * operate on flatpak specific refs.
+   */
+  if (g_strcmp0 (arg_ref, OSTREE_REPO_METADATA_REF) == 0)
+    return _handle_deploy_ostree_metadata (object,
+                                           invocation,
+                                           system,
+                                           arg_repo_path,
+                                           arg_origin);
 
   ref = flatpak_decomposed_new_from_ref (arg_ref, &error);
   if (ref == NULL)

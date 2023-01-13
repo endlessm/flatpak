@@ -20,10 +20,11 @@
 set -euo pipefail
 
 USE_COLLECTIONS_IN_SERVER=yes
+USE_COLLECTIONS_IN_CLIENT=yes
 
 . $(dirname $0)/libtest.sh
 
-echo "1..1"
+echo "1..2"
 
 setup_repo
 
@@ -37,3 +38,10 @@ ${FLATPAK} repo --branches repos/test > branches
 assert_file_has_content branches "^ostree-metadata\s"
 
 ok "server repo"
+
+# Ensure a remote with a collection ID defined fetches the
+# ostree-metadata commit.
+${FLATPAK} ${U} remote-ls test-repo >/dev/null
+assert_has_file ${FL_DIR}/repo/refs/remotes/test-repo/ostree-metadata
+
+ok "client repo"
