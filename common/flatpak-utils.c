@@ -4723,6 +4723,108 @@ flatpak_repo_gc_digested_summaries (OstreeRepo *repo,
   return TRUE;
 }
 
+static gboolean
+create_ostree_metadata_commit (OstreeRepo    *repo,
+                               const gchar  **gpg_key_ids,
+                               const gchar   *gpg_homedir,
+                               GCancellable  *cancellable,
+                               GError       **error)
+{
+  gboolean in_transaction = FALSE;
+  const gchar *collection_id = ostree_repo_get_collection_id (repo);
+  OstreeCollectionRef collection_ref = { (gchar *) collection_id, (gchar *) OSTREE_REPO_METADATA_REF };
+  g_autofree gchar *old_ostree_metadata_checksum = NULL;
+  g_autofree gchar *new_ostree_metadata_checksum = NULL;
+  g_autoptr(OstreeMutableTree) mtree = NULL;
+  g_autoptr(OstreeRepoFile) repo_file = NULL;
+  g_auto(GVariantBuilder) metadata_builder = FLATPAK_VARIANT_BUILDER_INITIALIZER;
+  g_autoptr(GVariant) metadata = NULL;
+  g_autoptr(GFileInfo) file_info = NULL;
+  g_autoptr(GVariant) dirmeta = NULL;
+  g_autofree guchar *csum_raw = NULL;
+  g_autofree gchar *csum = NULL;
+
+  /* Only create the commit if the repo has a collection ID. */
+  if (collection_id == NULL)
+    return TRUE;
+
+  if (!ostree_repo_resolve_rev_ext (repo, OSTREE_REPO_METADATA_REF,
+                                    TRUE, OSTREE_REPO_RESOLVE_REV_EXT_NONE,
+                                    &old_ostree_metadata_checksum, error))
+    goto fail;
+
+  /* Add summary metadata and bindings to the commit metadata. */
+  g_variant_builder_init (&metadata_builder, G_VARIANT_TYPE_VARDICT);
+  add_summary_metadata (repo, &metadata_builder);
+  g_variant_builder_add (&metadata_builder, "{sv}", OSTREE_COMMIT_META_KEY_COLLECTION_BINDING,
+                         g_variant_new_string (collection_ref.collection_id));
+  g_variant_builder_add (&metadata_builder, "{sv}", OSTREE_COMMIT_META_KEY_REF_BINDING,
+                         g_variant_new_strv ((const gchar * const *) &collection_ref.ref_name, 1));
+  metadata = g_variant_builder_end (&metadata_builder);
+
+  if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
+    goto fail;
+
+  in_transaction = TRUE;
+
+  /* Set up an empty mtree. */
+  mtree = ostree_mutable_tree_new ();
+
+  file_info = g_file_info_new ();
+  g_file_info_set_attribute_uint32 (file_info, "unix::uid", 0);
+  g_file_info_set_attribute_uint32 (file_info, "unix::gid", 0);
+  g_file_info_set_attribute_uint32 (file_info, "unix::mode", (0755 | S_IFDIR));
+
+  dirmeta = ostree_create_directory_metadata (file_info, NULL /* xattrs */);
+
+  if (!ostree_repo_write_metadata (repo, OSTREE_OBJECT_TYPE_DIR_META, NULL,
+                                   dirmeta, &csum_raw, cancellable, error))
+    goto fail;
+
+  csum = ostree_checksum_from_bytes (csum_raw);
+  ostree_mutable_tree_set_metadata_checksum (mtree, csum);
+
+  if (!ostree_repo_write_mtree (repo, mtree, (GFile **) &repo_file,
+                                cancellable, error))
+    goto fail;
+
+  if (!ostree_repo_write_commit (repo, old_ostree_metadata_checksum,
+                                 NULL  /* subject */, NULL  /* body */,
+                                 metadata, repo_file, &new_ostree_metadata_checksum,
+                                 cancellable, error))
+    goto fail;
+
+  if (gpg_key_ids != NULL)
+    {
+      for (const char * const *iter = (const char * const *) gpg_key_ids;
+           iter != NULL && *iter != NULL; iter++)
+        {
+          const char *key_id = *iter;
+
+          if (!ostree_repo_sign_commit (repo,
+                                        new_ostree_metadata_checksum,
+                                        key_id,
+                                        gpg_homedir,
+                                        cancellable,
+                                        error))
+            goto fail;
+        }
+    }
+
+  ostree_repo_transaction_set_collection_ref (repo, &collection_ref,
+                                              new_ostree_metadata_checksum);
+
+  if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
+    goto fail;
+
+  return TRUE;
+
+ fail:
+  if (in_transaction)
+    (void) ostree_repo_abort_transaction (repo, cancellable, NULL);
+
+  return FALSE;
+}
 
 /* Update the metadata in the summary file for @repo, and then re-sign the file.
  * If the repo has a collection ID set, additionally store the metadata on a
@@ -4765,6 +4867,13 @@ flatpak_repo_update (OstreeRepo   *repo,
   g_autofree char *old_index_digest = NULL;
 
   config = ostree_repo_get_config (repo);
+
+  /* Endless-specific: Create the ostree-metadata commit before listing
+   * the refs to include in the summary files.
+   */
+  if (!create_ostree_metadata_commit (repo, gpg_key_ids, gpg_homedir,
+                                      cancellable, error))
+    return FALSE;
 
   if (!ostree_repo_list_refs_ext (repo, NULL, &refs,
                                   OSTREE_REPO_LIST_REFS_EXT_EXCLUDE_REMOTES | OSTREE_REPO_LIST_REFS_EXT_EXCLUDE_MIRRORS,

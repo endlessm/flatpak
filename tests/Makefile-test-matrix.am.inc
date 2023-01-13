@@ -28,6 +28,10 @@ TEST_MATRIX= \
 	tests/test-summaries@system.wrap \
 	tests/test-subset@user.wrap \
 	tests/test-subset@system.wrap \
+	tests/test-ostree-metadata@user.wrap \
+	tests/test-ostree-metadata@system.wrap \
+	tests/test-ostree-metadata@user,oldsummary.wrap \
+	tests/test-ostree-metadata@system,oldsummary.wrap \
 	$(NULL)
 TEST_MATRIX_DIST= \
 	tests/test-basic.sh \
@@ -58,4 +62,5 @@ TEST_MATRIX_EXTRA_DIST= \
 	tests/test-update-portal.sh \
 	tests/test-summaries.sh \
 	tests/test-subset.sh \
+	tests/test-ostree-metadata.sh \
 	$(NULL)

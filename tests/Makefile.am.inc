@@ -283,6 +283,7 @@ TEST_MATRIX_SOURCE = \
 	tests/test-prune.sh \
 	tests/test-seccomp.sh \
 	tests/test-repair.sh \
+	tests/test-ostree-metadata.sh{{user+system}+{{user+system},oldsummary}} \
 	$(NULL)
 
 update-test-matrix:
