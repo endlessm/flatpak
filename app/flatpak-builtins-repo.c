@@ -227,6 +227,22 @@ print_branches_for_subsummary (FlatpakTablePrinter *printer,
           const char *metadata;
           const char *eol;
 
+          /* Endless-specific: Print the ostree-metadata ref if it's
+           * included in the summary.
+           */
+          if (g_strcmp0 (ref, OSTREE_REPO_METADATA_REF) == 0)
+            {
+              g_autofree char *size = g_format_size (0);
+
+              flatpak_table_printer_set_key (printer, ref);
+              flatpak_table_printer_add_column (printer, ref);
+              flatpak_table_printer_add_decimal_column (printer, size);
+              flatpak_table_printer_add_decimal_column (printer, size);
+              flatpak_table_printer_finish_row (printer);
+
+              continue;
+            }
+
           if (data == NULL)
             continue;
 
@@ -264,8 +280,38 @@ print_branches_for_subsummary (FlatpakTablePrinter *printer,
     }
   else
     {
+      g_autoptr(GVariant) refs = NULL;
       g_autoptr(GVariant) cache = NULL;
       g_autoptr(GVariant) sparse_cache = NULL;
+      GVariantIter ref_iter;
+      GVariant *value;
+
+      /* Endless-specific: Print the ostree-metadata ref if it's
+       * included in the summary.
+       */
+      refs = g_variant_get_child_value (summary, 0);
+      g_variant_iter_init (&ref_iter, refs);
+      while ((value = g_variant_iter_next_value (&ref_iter)) != NULL)
+        {
+          const char *ref = NULL;
+
+          g_variant_get_child (value, 0, "&s", &ref);
+          if (g_strcmp0 (ref, OSTREE_REPO_METADATA_REF) == 0)
+            {
+              g_autofree char *size = g_format_size (0);
+
+              flatpak_table_printer_set_key (printer, ref);
+              flatpak_table_printer_add_column (printer, ref);
+              flatpak_table_printer_add_decimal_column (printer, size);
+              flatpak_table_printer_add_decimal_column (printer, size);
+              flatpak_table_printer_finish_row (printer);
+
+              g_variant_unref (value);
+              break;
+            }
+
+          g_variant_unref (value);
+        }
 
       g_variant_lookup (meta, "xa.sparse-cache", "@a{sa{sv}}", &sparse_cache);
       cache = g_variant_lookup_value (meta, "xa.cache", NULL);
