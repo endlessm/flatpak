@@ -32,11 +32,6 @@ echo "1..9"
 #Regular repo
 setup_repo
 
-# Endless-specific: bring back the ostree-metadata ref and then
-# regenerate the appropriate flatpak repo metadata.
-ostree --repo=repos/test summary --update ${FL_GPGARGS}
-update_repo
-
 # Ensure we have the full locale extension:
 ${FLATPAK} ${U} config  --set languages "*"
 
@@ -52,8 +47,6 @@ assert_has_file usb_dir/repo/refs/mirrors/org.test.Collection.test/app/org.test.
 assert_has_file usb_dir/repo/refs/mirrors/org.test.Collection.test/runtime/org.test.Hello.Locale/${ARCH}/master
 assert_has_file usb_dir/repo/refs/mirrors/org.test.Collection.test/runtime/org.test.Platform/${ARCH}/master
 assert_has_file usb_dir/repo/refs/mirrors/org.test.Collection.test/appstream2/${ARCH}
-# Endless-specific: make sure ostree-metadata is there for backwards compat
-assert_has_file usb_dir/repo/refs/mirrors/org.test.Collection.test/ostree-metadata
 
 ${FLATPAK} ${U} uninstall -y --all
 
