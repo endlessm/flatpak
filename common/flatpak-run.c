@@ -1856,6 +1856,7 @@ static const ExportData default_exports[] = {
   {"GST_PTP_HELPER", NULL},
   {"GST_PTP_HELPER_1_0", NULL},
   {"GST_INSTALL_PLUGINS_HELPER", NULL},
+  {"GDK_BACKEND", NULL},
 };
 
 static const ExportData no_ld_so_cache_exports[] = {
