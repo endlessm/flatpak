@@ -89,6 +89,7 @@
             <member>PERLLIB</member>
             <member>PERL5LIB</member>
             <member>XCURSOR_PATH</member>
+            <member>GDK_BACKEND</member>
         </simplelist>
         <para>
             Flatpak also overrides the XDG environment variables to point sandboxed applications
