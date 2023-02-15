@@ -45,6 +45,7 @@ override_dh_auto_configure:
 		-Dsystem_dbus_proxy=xdg-dbus-proxy \
 		-Dsystem_helper_user=_flatpak \
 		-Dsystemdsystemunitdir=/lib/systemd/system \
+		-Dsystem_font_cache_dirs=/usr/lib/fontconfig/cache \
 		$(configure_options)
 
 override_dh_install:
