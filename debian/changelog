@@ -1,4 +1,4 @@
-flatpak (1.10.8-0+deb11u1) UNRELEASED; urgency=high
+flatpak (1.10.8-0+deb11u1) bullseye-security; urgency=high
 
   * New upstream stable release
   * Security fixes:
@@ -20,7 +20,7 @@ flatpak (1.10.8-0+deb11u1) UNRELEASED; urgency=high
     - Add test coverage for seccomp filters
   * d/copyright: Update
 
- -- Simon McVittie <smcv@debian.org>  Thu, 16 Mar 2023 12:28:14 +0000
+ -- Simon McVittie <smcv@debian.org>  Thu, 16 Mar 2023 12:31:12 +0000
 
 flatpak (1.10.7-0+deb11u1) bullseye-security; urgency=high
 
