@@ -1,3 +1,9 @@
+flatpak (1.12.8-0endless1) master; urgency=medium
+
+  * New upstream stable release (T34619)
+
+ -- Dan Nicholson <dbn@endlessos.org>  Thu, 23 Mar 2023 17:08:58 -0600
+
 flatpak (1.12.7-1~bpo11+1endless1) master; urgency=medium
 
   * Rebase on Debian Bullseye backports 1.12.7 release (T33491)
