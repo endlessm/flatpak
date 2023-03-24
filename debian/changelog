@@ -1,3 +1,12 @@
+flatpak (1.10.8-0+deb11u1endless1) eos4.0; urgency=medium
+
+  * Rebase on Debian 1.10.8-0+deb11u1 release (T34619)
+    - Add eos-metrics dependency
+    - Enable USB sideloading from /run/media
+    - Only load fontconfig cache from /usr/lib/fontconfig/cache
+
+ -- Dan Nicholson <dbn@endlessos.org>  Thu, 23 Mar 2023 21:46:51 -0600
+
 flatpak (1.10.8-0+deb11u1) bullseye-security; urgency=high
 
   * New upstream stable release
