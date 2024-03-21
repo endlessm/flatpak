@@ -11,7 +11,7 @@ usr/lib/systemd/user/flatpak-session-helper.service
 usr/lib/systemd/user/flatpak-sideload-usb-repo.path
 usr/lib/systemd/user/flatpak-sideload-usb-repo.service
 usr/lib/sysusers.d
-usr/lib/tmpfiles.d/flatpak-sideload-repos.conf
+usr/lib/tmpfiles.d
 usr/libexec/flatpak-oci-authenticator
 usr/libexec/flatpak-portal
 usr/libexec/flatpak-session-helper
