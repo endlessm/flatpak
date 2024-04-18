@@ -11,7 +11,6 @@ Build-Depends:
  bubblewrap (>= 0.8.0-2+deb12u1~),
  ca-certificates <!nocheck>,
  dbus-daemon,
- debhelper (>= 13.11.6~),
  debhelper-compat (= 13),
  desktop-file-utils <!nocheck>,
  dh-exec (>= 0.23~),
