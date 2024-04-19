@@ -1,3 +1,9 @@
+flatpak (1.14.6-0endless1) eos; urgency=high
+
+  * New upstream security release.
+
+ -- Will Thompson <wjt@endlessos.org>  Fri, 19 Apr 2024 10:17:28 +0100
+
 flatpak (1.14.5-0endless1) eos; urgency=medium
 
   * New upstream release.
