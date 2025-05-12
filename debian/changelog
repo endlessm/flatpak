@@ -1,3 +1,15 @@
+flatpak (1.16.0-2~bpo12+1) UNRELEASED; urgency=medium
+
+  * d/control, d/gbp.conf: Branch for Debian 12 'bookworm' backports
+  * d/control, d/p/debian/build-Relax-bubblewrap-dependency.patch:
+    Relax bubblewrap dependency to the version from bookworm-security.
+    This contains the required --[ro-]bind-fd feature, backported
+    from 0.10.0.
+  * Revert "d/control: Build-depend on required GIR XML files"
+  * Revert "Install systemd system unit into /usr/lib/systemd/system"
+
+ -- Simon McVittie <smcv@debian.org>  Mon, 12 May 2025 13:53:54 +0100
+
 flatpak (1.16.0-2) unstable; urgency=medium
 
   * d/changelog: Fix Ubuntu version information in 1.15.91-1 changelog.
