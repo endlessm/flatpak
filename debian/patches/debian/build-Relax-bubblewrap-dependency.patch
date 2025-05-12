@@ -1,0 +1,25 @@
+From: Simon McVittie <smcv@debian.org>
+Date: Mon, 12 May 2025 13:36:25 +0100
+Subject: build: Relax bubblewrap dependency
+
+In Debian, bubblewrap 0.8.0-2+deb12u1 has a backport of the
+--[ro-]bind-fd feature.
+
+Forwarded: not-needed, Debian-specific change
+---
+ meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/meson.build b/meson.build
+index a1b783b..0512471 100644
+--- a/meson.build
++++ b/meson.build
+@@ -34,7 +34,7 @@ endif
+ 
+ required_glib = '2.46'
+ # Before increasing this, update subprojects/bubblewrap.wrap
+-required_bwrap = '0.10.0'
++required_bwrap = '0.8.0'
+ # Before increasing this, update subprojects/dbus-proxy.wrap
+ required_dbus_proxy = '0.1.0'
+ required_libostree = '2020.8'
