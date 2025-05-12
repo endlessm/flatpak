@@ -69,7 +69,7 @@ Build-Depends-Indep:
  libostree-doc,
 Standards-Version: 4.7.0
 Homepage: https://flatpak.org/
-Vcs-Git: https://salsa.debian.org/debian/flatpak.git
+Vcs-Git: https://salsa.debian.org/debian/flatpak.git -b bookworm-backports
 Vcs-Browser: https://salsa.debian.org/debian/flatpak
 Rules-Requires-Root: no
 
