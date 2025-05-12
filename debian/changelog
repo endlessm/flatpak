@@ -1,4 +1,4 @@
-flatpak (1.16.1-1~bpo12+1) UNRELEASED; urgency=medium
+flatpak (1.16.1-1~bpo12+1) bookworm-backports; urgency=medium
 
   * Merge 1.16.1-1
   * Remaining changes for bookworm-backports:
@@ -8,7 +8,7 @@ flatpak (1.16.1-1~bpo12+1) UNRELEASED; urgency=medium
     - Revert "d/control: Build-depend on required GIR XML files"
     - Revert "Install systemd system unit into /usr/lib/systemd/system"
 
- -- Simon McVittie <smcv@debian.org>  Mon, 12 May 2025 15:12:42 +0100
+ -- Simon McVittie <smcv@debian.org>  Mon, 12 May 2025 15:13:33 +0100
 
 flatpak (1.16.1-1) unstable; urgency=medium
 
