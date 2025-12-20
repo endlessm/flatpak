@@ -1,3 +1,24 @@
+flatpak (1.16.2-1~deb13u1) trixie; urgency=medium
+
+  * d/control, d/gbp.conf: Use debian/trixie packaging branch
+  * Summary of changes since trixie:
+    - New upstream stable release, see 1.16.2-1 changelog
+      (Closes: #1114484)
+    - Fix FTBFS with DEB_BUILD_OPTIONS=nocheck
+      (Closes: #1116737)
+    - d/copyright: Point to GNU web address instead of old FSF postal
+      address
+    - d/copyright: Clarify possible interpretations of LGPL-2
+  * Revert changes that are not appropriate for a stable update:
+    - Revert "Prefer the OpenSSL flavour of libcurl"
+    - Revert "d/control: Only require gtk-doc-tools, etc. if we are
+      building documentation"
+    - Revert "Stop build-depending on libgirepository1.0-dev"
+    - Revert "d/control: Remove Rules-Requires-Root"
+    - Revert "Normalize formatting with debputy"
+
+ -- Simon McVittie <smcv@debian.org>  Sat, 20 Dec 2025 17:15:35 +0000
+
 flatpak (1.16.2-1) unstable; urgency=medium
 
   * New upstream stable release
