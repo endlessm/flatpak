@@ -1,3 +1,16 @@
+flatpak (1.16.3-1~deb13u1) UNRELEASED; urgency=medium
+
+  * Backport new upstream stable release for Debian 13
+    - In flatpak-build(1), only provide /run/host/font-dirs.xml if the
+      calling process has not already added it, fixing a regression for
+      users of GNOME Builder and Foundry (flatpak#6450 upstream)
+  * Revert changes that are not appropriate for a stable update:
+    - Revert "d/watch: Convert to v5 format, only watch stable
+      (even-numbered) releases"
+    - Revert "Standards-Version: 4.7.3"
+
+ -- Simon McVittie <smcv@debian.org>  Sat, 24 Jan 2026 17:20:19 +0000
+
 flatpak (1.16.3-1) unstable; urgency=medium
 
   * New upstream stable release
