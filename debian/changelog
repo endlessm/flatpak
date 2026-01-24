@@ -1,4 +1,4 @@
-flatpak (1.16.3-1~deb13u1) UNRELEASED; urgency=medium
+flatpak (1.16.3-1~deb13u1) trixie; urgency=medium
 
   * Backport new upstream stable release for Debian 13
     - In flatpak-build(1), only provide /run/host/font-dirs.xml if the
@@ -9,7 +9,7 @@ flatpak (1.16.3-1~deb13u1) UNRELEASED; urgency=medium
       (even-numbered) releases"
     - Revert "Standards-Version: 4.7.3"
 
- -- Simon McVittie <smcv@debian.org>  Sat, 24 Jan 2026 17:20:19 +0000
+ -- Simon McVittie <smcv@debian.org>  Sat, 24 Jan 2026 21:55:30 +0000
 
 flatpak (1.16.3-1) unstable; urgency=medium
 
