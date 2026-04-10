@@ -1,4 +1,4 @@
-flatpak (1.16.6-1~deb13u1) UNRELEASED; urgency=medium
+flatpak (1.16.6-1~deb13u1) trixie-security; urgency=high
 
   * Backport new upstream stable release for Debian 13
     - Fix a sandbox escape involving symlinks passed to flatpak-portal.
@@ -22,7 +22,7 @@ flatpak (1.16.6-1~deb13u1) UNRELEASED; urgency=medium
       (even-numbered) releases"
     - Revert "Standards-Version: 4.7.3"
 
- -- Simon McVittie <smcv@debian.org>  Fri, 10 Apr 2026 20:02:11 +0100
+ -- Simon McVittie <smcv@debian.org>  Fri, 10 Apr 2026 20:03:53 +0100
 
 flatpak (1.16.6-1) unstable; urgency=high
 
