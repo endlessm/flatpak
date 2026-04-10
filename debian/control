@@ -11,6 +11,7 @@ Build-Depends:
  bison,
  bubblewrap (>= 0.10.0~),
  ca-certificates <!nocheck>,
+ curl <!nocheck>,
  dbus-daemon,
  debhelper (>= 13.11.6~),
  debhelper-compat (= 13),
@@ -128,6 +129,7 @@ Section: misc
 Depends:
  attr,
  ca-certificates,
+ curl,
  dbus-daemon,
  desktop-file-utils,
  flatpak (= ${binary:Version}),
