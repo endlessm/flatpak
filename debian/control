@@ -5,11 +5,13 @@ Maintainer: Utopia Maintenance Team <pkg-utopia-maintainers@lists.alioth.debian.
 Uploaders:
  Matthias Klumpp <mak@debian.org>,
  Simon McVittie <smcv@debian.org>,
+# We need polkitd, socat, etc. if !nocheck || !noinsttest
 Build-Depends:
  attr <!nocheck>,
  bison,
  bubblewrap (>= 0.8.0-2+deb12u1~),
  ca-certificates <!nocheck>,
+ curl <!nocheck>,
  dbus-daemon,
  debhelper-compat (= 13),
  desktop-file-utils <!nocheck>,
@@ -17,7 +19,7 @@ Build-Depends:
  dh-sequence-gir,
  docbook-xml <!nodoc>,
  docbook-xsl <!nodoc>,
- fuse3 <!nocheck>,
+ fuse3,
  gnupg <!nocheck>,
  gobject-introspection (>= 1.54.1-2~),
  gtk-doc-tools,
@@ -51,12 +53,12 @@ Build-Depends:
  meson (>= 0.53.0),
  ostree (>= 2020.8) <!nocheck>,
  pkgconf,
- polkitd <!nocheck>,
+ polkitd <!nocheck> <!noinsttest>,
  procps,
  python3:any,
  python3-pyparsing,
  shared-mime-info <!nocheck>,
- socat <!nocheck>,
+ socat <!nocheck> <!noinsttest>,
  wayland-protocols,
  xdg-dbus-proxy (>= 0.1.0),
  xmlto <!nodoc>,
@@ -66,7 +68,7 @@ Build-Depends-Indep:
  libostree-doc,
 Standards-Version: 4.7.2
 Homepage: https://flatpak.org/
-Vcs-Git: https://salsa.debian.org/debian/flatpak.git -b bookworm-backports
+Vcs-Git: https://salsa.debian.org/debian/flatpak.git -b debian/bookworm-backports
 Vcs-Browser: https://salsa.debian.org/debian/flatpak
 Rules-Requires-Root: no
 
@@ -118,11 +120,13 @@ Description: Application deployment framework for desktop apps
  limited access to resources outside the sandbox.
 
 Package: flatpak-tests
+Build-Profiles: <!noinsttest>
 Architecture: linux-any
 Section: misc
 Depends:
  attr,
  ca-certificates,
+ curl,
  dbus-daemon,
  desktop-file-utils,
  flatpak (= ${binary:Version}),

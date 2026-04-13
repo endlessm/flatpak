@@ -123,6 +123,7 @@ flatpak_oci_registry_finalize (GObject *object)
   g_clear_pointer (&self->base_uri, g_uri_unref);
   g_free (self->uri);
   g_free (self->token);
+  g_clear_pointer (&self->certificates, flatpak_certificates_free);
 
   G_OBJECT_CLASS (flatpak_oci_registry_parent_class)->finalize (object);
 }
@@ -274,6 +275,9 @@ flatpak_oci_registry_new (const char   *uri,
   return oci_registry;
 }
 
+/* Carefully opens a file from a base directory and subpath,
+ * making sure that its not a symlink, pipe, etc.
+ */
 static int
 local_open_file (int           dfd,
                  const char   *subpath,
@@ -285,7 +289,7 @@ local_open_file (int           dfd,
   struct stat tmp_st_buf;
 
   do
-    fd = openat (dfd, subpath, O_RDONLY | O_NONBLOCK | O_CLOEXEC | O_NOCTTY);
+    fd = openat (dfd, subpath, O_NOFOLLOW | O_RDONLY | O_NONBLOCK | O_CLOEXEC | O_NOCTTY);
   while (G_UNLIKELY (fd == -1 && errno == EINTR));
   if (fd == -1)
     {

@@ -703,9 +703,10 @@ flatpak_installation_launch_full (FlatpakInstallation *self,
 
   if (!flatpak_run_app (app_ref,
                         app_deploy,
+                        FLATPAK_RUN_APP_DEPLOY_APP_ORIGINAL,
                         NULL,
-                        NULL, NULL,
                         NULL, NULL, NULL,
+                        FLATPAK_RUN_APP_DEPLOY_USR_ORIGINAL,
                         0,
                         run_flags,
                         NULL,
@@ -713,6 +714,7 @@ flatpak_installation_launch_full (FlatpakInstallation *self,
                         NULL, 0, -1,
                         (const char * const *) run_environ,
                         &instance_dir,
+                        NULL, NULL,
                         cancellable, error))
     return FALSE;
 
@@ -1775,7 +1777,7 @@ flatpak_installation_install_bundle (FlatpakInstallation    *self,
   if (!flatpak_dir_ensure_repo (dir_clone, cancellable, error))
     return NULL;
 
-  if (!flatpak_dir_install_bundle (dir_clone, file, remote, NULL,
+  if (!flatpak_dir_install_bundle (dir_clone, FALSE, file, remote, NULL,
                                    cancellable, error))
     return NULL;
 

@@ -343,11 +343,23 @@ char * flatpak_escape_string (const char        *s,
 gboolean flatpak_validate_path_characters (const char *path,
                                            GError    **error);
 
-gboolean running_under_sudo (void);
+gboolean running_under_sudo_root (void);
 
 void flatpak_set_debugging (gboolean debugging);
 gboolean flatpak_is_debugging (void);
 
+int flatpak_parse_fd (const char  *fd_string,
+                      GError     **error);
+
+char * flatpak_get_path_for_fd (int      fd,
+                                GError **error);
+
 #define FLATPAK_MESSAGE_ID "c7b39b1e006b464599465e105b361485"
+
+gboolean flatpak_set_cloexec (int fd);
+
+int flatpak_accept_fd_argument (const char  *option_name,
+                                const char  *value,
+                                GError     **error);
 
 #endif /* __FLATPAK_UTILS_H__ */

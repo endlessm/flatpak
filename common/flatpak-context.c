@@ -44,6 +44,7 @@
 #include "flatpak-error.h"
 #include "flatpak-metadata-private.h"
 #include "flatpak-usb-private.h"
+#include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
 
 /* Same order as enum */
@@ -1381,21 +1382,14 @@ option_env_fd_cb (const gchar *option_name,
                   GError     **error)
 {
   FlatpakContext *context = data;
-  guint64 fd;
-  gchar *endptr;
-  gboolean ret;
+  glnx_autofd int fd = -1;
 
-  fd = g_ascii_strtoull (value, &endptr, 10);
+  fd = flatpak_accept_fd_argument (option_name, value, error);
 
-  if (endptr == NULL || *endptr != '\0' || fd > G_MAXINT)
-    return glnx_throw (error, "Not a valid file descriptor: %s", value);
+  if (fd < 0)
+    return FALSE;
 
-  ret = flatpak_context_parse_env_fd (context, (int) fd, error);
-
-  if (fd >= 3)
-    close (fd);
-
-  return ret;
+  return flatpak_context_parse_env_fd (context, fd, error);
 }
 
 static gboolean
@@ -2939,6 +2933,8 @@ flatpak_context_export (FlatpakContext *context,
           const char *rest = NULL;
           const char *config_key = NULL;
           g_autofree char *subpath = NULL;
+          g_autofree char *canonical_path = NULL;
+          g_autofree char *canonical_home = NULL;
 
           if (!get_xdg_user_dir_from_string (filesystem, &config_key, &rest, &path))
             {
@@ -2949,7 +2945,10 @@ flatpak_context_export (FlatpakContext *context,
           if (path == NULL)
             continue; /* Unconfigured, ignore */
 
-          if (strcmp (path, g_get_home_dir ()) == 0)
+          canonical_path = flatpak_canonicalize_filename (path);
+          canonical_home = flatpak_canonicalize_filename (g_get_home_dir ());
+
+          if (strcmp (canonical_path, canonical_home) == 0)
             {
               /* xdg-user-dirs sets disabled dirs to $HOME, and its in general not a good
                  idea to set full access to $HOME other than explicitly, so we ignore
