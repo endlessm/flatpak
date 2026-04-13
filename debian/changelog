@@ -1,4 +1,4 @@
-flatpak (1.16.6-1~deb13u1~bpo12+1) UNRELEASED; urgency=high
+flatpak (1.16.6-1~deb13u1~bpo12+1) bookworm-backports; urgency=high
 
   * Merge trixie security update 1.16.6-1~deb13u1
     - Fix a sandbox escape involving symlinks passed to flatpak-portal.
@@ -24,7 +24,7 @@ flatpak (1.16.6-1~deb13u1~bpo12+1) UNRELEASED; urgency=high
     - Revert "d/control: Build-depend on required GIR XML files"
     - Revert "Install systemd system unit into /usr/lib/systemd/system"
 
- -- Simon McVittie <smcv@debian.org>  Mon, 13 Apr 2026 10:21:14 +0100
+ -- Simon McVittie <smcv@debian.org>  Mon, 13 Apr 2026 10:29:00 +0100
 
 flatpak (1.16.6-1~deb13u1) trixie-security; urgency=high
 
