@@ -1,3 +1,31 @@
+flatpak (1.16.6-1~deb13u1~bpo12+1) UNRELEASED; urgency=high
+
+  * Merge trixie security update 1.16.6-1~deb13u1
+    - Fix a sandbox escape involving symlinks passed to flatpak-portal.
+      A malicious or compromised Flatpak app could exploit this to achieve
+      arbitrary code execution on the host.
+      (CVE-2026-34078, GHSA-cc2q-qc34-jprg) (Closes: #1132943)
+    - Prevent arbitrary file deletion outside the sandbox by a malicious or
+      compromised Flatpak app
+      (CVE-2026-34079, GHSA-p29x-r292-46pp) (Closes: #1132944)
+    - Prevent a local user from reading any file that is readable by the
+      _flatpak system user. A mitigation is that it would be very unusual
+      for these files not to be readable by the original local user as well.
+      (No CVE ID, GHSA-2fxp-43j9-pwvc) (Closes: #1132946)
+    - Prevent a local user from making another local user unable to cancel
+      an ongoing download of apps or runtimes installed system-wide
+      via the system helper.
+      (No CVE ID, GHSA-89xm-3m96-w3jg) (Closes: #1132945)
+    - Various fixes for regressions caused when fixing CVE-2026-34078
+  * Remaining changes for bookworm-backports:
+    - d/control, d/gbp.conf: Branch for Debian 12 'bookworm' backports
+    - d/control, d/p/debian/build-Relax-bubblewrap-dependency.patch:
+      Relax bubblewrap dependency to the version from bookworm-security
+    - Revert "d/control: Build-depend on required GIR XML files"
+    - Revert "Install systemd system unit into /usr/lib/systemd/system"
+
+ -- Simon McVittie <smcv@debian.org>  Mon, 13 Apr 2026 10:21:14 +0100
+
 flatpak (1.16.6-1~deb13u1) trixie-security; urgency=high
 
   * Backport new upstream stable release for Debian 13
