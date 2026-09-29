@@ -21,6 +21,8 @@ set -euo pipefail
 
 . $(dirname $0)/libtest.sh
 
+skip_revokefs_without_fuse
+
 echo "1..2"
 
 setup_repo
